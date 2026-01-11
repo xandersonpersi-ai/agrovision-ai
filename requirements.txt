@@ -1,3 +1,4 @@
+opencv-python-headless==4.8.0.74
 ultralytics
 streamlit
 streamlit-folium
@@ -6,4 +7,3 @@ pandas
 exif
 Pillow
 plotly
-opencv-python-headless
