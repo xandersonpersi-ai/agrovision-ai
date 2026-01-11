@@ -26,7 +26,7 @@ st.title("AgroVision Pro AI 🛰️")
 st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. FICHA TÉCNICA COMPLETA (SIDEBAR RECUPERADA)
+# 3. FICHA TÉCNICA E CONTROLE (SIDEBAR)
 st.sidebar.header("📋 Cadastro de Campo")
 with st.sidebar.expander("Identificação", expanded=True):
     nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
@@ -49,7 +49,7 @@ def extrair_gps_st(img_file):
     except: return None
     return None
 
-# 5. UPLOAD E PROCESSAMENTO
+# 5. UPLOAD E PROCESSAMENTO IA
 uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS DA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
@@ -85,7 +85,7 @@ if uploaded_files:
         media_ponto = df['Pragas'].mean()
         status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
-        # 6. SUMÁRIO EXECUTIVO (KPIs RECUPERADOS)
+        # 6. SUMÁRIO EXECUTIVO (KPIs)
         st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
@@ -97,7 +97,6 @@ if uploaded_files:
 
         # 7. MAPA E CENTRO DE INTELIGÊNCIA
         col_mapa, col_intel = st.columns([1.6, 1])
-        
         with col_mapa:
             st.subheader("📍 Georreferenciamento")
             df_geo = df.dropna(subset=['Lat', 'Lon'])
@@ -110,7 +109,6 @@ if uploaded_files:
 
         with col_intel:
             st.subheader("📈 Análise Técnica")
-            # VOLTOU O VELOCÍMETRO ORIGINAL COM STEPS
             fig_gauge = go.Figure(go.Indicator(
                 mode = "gauge+number", value = media_ponto,
                 title = {'text': "Média Pragas / Ponto"},
@@ -126,7 +124,7 @@ if uploaded_files:
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-            # VELAS DOS 10 PONTOS CRÍTICOS (SUBSTITUIU O RANKING)
+            # VELAS DOS 10 PONTOS CRÍTICOS
             st.write("**🕯️ Volatilidade: Top 10 Pontos**")
             df_top10 = df.nlargest(10, 'Pragas')
             fig_candle = go.Figure(data=[go.Candlestick(
@@ -137,7 +135,7 @@ if uploaded_files:
             fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 8. RECOMENDAÇÃO TÉCNICA IA (RECUPERADA)
+        # 8. RECOMENDAÇÃO TÉCNICA
         st.markdown("---")
         st.subheader("💡 Recomendação de Manejo (IA)")
         rec_col1, rec_col2 = st.columns([1, 3])
@@ -146,18 +144,22 @@ if uploaded_files:
             else: st.success("BAIXA INFESTAÇÃO")
         with rec_col2:
             if status_sanitario == "CRÍTICO":
-                st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Recomenda-se a aplicação localizada nos pontos vermelhos indicados no mapa para a cultura de {tipo_plantio}.")
+                st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Recomenda-se a aplicação localizada conforme o mapa para a cultura de {tipo_plantio}.")
             else:
-                st.write(f"Os níveis em **{nome_fazenda}** estão controlados. Continue o monitoramento.")
+                st.write(f"Níveis controlados em **{nome_fazenda}**. Continue o monitoramento.")
 
-        # 9. GALERIA DE EVIDÊNCIAS
+        # 9. DADOS BRUTOS (MOVIDO PARA CIMA DA GALERIA)
         st.markdown("---")
-        st.subheader("📸 Galeria de Focos Críticos (IA)")
-        for _, row in df.nlargest(10, 'Pragas').iterrows():
-            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
-
-        # 10. DADOS E DOWNLOAD (RECUPERADO)
-        with st.expander("Ver Dados Brutos"):
+        with st.expander("📊 Ver Dados Brutos e Exportar", expanded=False):
             st.dataframe(df.drop(columns=['Imagem_Proc']), use_container_width=True)
             csv = df.drop(columns=['Imagem_Proc']).to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Exportar Relatório CSV", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+            st.download_button("📥 Baixar Relatório CSV", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+
+        # 10. GALERIA DE EVIDÊNCIAS (FINAL DO RELATÓRIO)
+        st.subheader("📸 Galeria de Focos Críticos (Evidências IA)")
+        for _, row in df.nlargest(10, 'Pragas').iterrows():
+            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
+            st.markdown("---")
+
+else:
+    st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard.")
