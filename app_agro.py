@@ -173,4 +173,36 @@ if uploaded_files:
             st.dataframe(df, use_container_width=True)
             st.download_button("📥 Exportar Relatório CSV", df.to_csv(index=False).encode('utf-8'), f"Relatorio_{nome_fazenda}.csv", "text/csv")
 else:
+from fpdf import FPDF
+
+def gerar_pdf(df_dados, fazenda, tecnico):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, "Relatório de Monitoramento AgroVision Pro", ln=True, align='C')
+    
+    pdf.set_font("Arial", size=12)
+    pdf.ln(10)
+    pdf.cell(200, 10, f"Propriedade: {fazenda}", ln=True)
+    pdf.cell(200, 10, f"Responsável Técnico: {tecnico}", ln=True)
+    pdf.cell(200, 10, f"Data do Diagnóstico: {datetime.now().strftime('%d/%m/%Y')}", ln=True)
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, "Resumo de Amostragem:", ln=True)
+    pdf.set_font("Arial", size=10)
+    
+    for index, row in df_dados.iterrows():
+        pdf.cell(200, 8, f"- Amostra {row['Amostra']}: {row['Pragas']} pragas detectadas", ln=True)
+    
+    return pdf.output(dest='S').encode('latin-1')
+
+# Botão de Download na Interface
+pdf_file = gerar_pdf(df, nome_fazenda, nome_tecnico)
+st.download_button(
+    label="📄 Baixar Relatório Técnico para o Produtor",
+    data=pdf_file,
+    file_name=f"Relatorio_{nome_fazenda}.pdf",
+    mime="application/pdf"
+)
     st.info("💡 Dica: Arraste as fotos de inspeção do seu drone ou celular para gerar o diagnóstico em tempo real.")
