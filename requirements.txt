@@ -6,3 +6,4 @@ pandas
 exif
 Pillow
 plotly
+opencv-python-headless
