@@ -97,15 +97,26 @@ if uploaded_files:
 
         # 7. MAPA E CENTRO DE INTELIGÊNCIA
         col_mapa, col_intel = st.columns([1.6, 1])
-        with col_mapa:
-            st.subheader("📍 Georreferenciamento")
-            df_geo = df.dropna(subset=['Lat', 'Lon'])
-            if not df_geo.empty:
-                m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
-                for _, row in df_geo.iterrows():
-                    cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-                    folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
-                st_folium(m, width="100%", height=500)
+        # No trecho do Mapa, substitua por isso para evitar travamentos offline:
+
+with col_mapa:
+    st.subheader("📍 Georreferenciamento")
+    df_geo = df.dropna(subset=['Lat', 'Lon'])
+    if not df_geo.empty:
+        # Se estiver offline, o fundo pode sumir, mas os pontos de GPS (bolinhas) 
+        # e a escala de distância continuam funcionando 100%
+        m = folium.Map(
+            location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], 
+            zoom_start=18,
+            tiles=None # Isso evita que o app tente baixar o mapa da internet e trave
+        )
+       
+        folium.TileLayer('OpenStreetMap', control=False).add_to(m) 
+        
+        for _, row in df_geo.iterrows():
+            cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
+            folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
+        st_folium(m, width="100%", height=500)
 
         with col_intel:
             st.subheader("📈 Análise Técnica")
@@ -163,3 +174,4 @@ if uploaded_files:
 
 else:
     st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard.")
+
