@@ -10,29 +10,39 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE
-st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide", page_icon="🌱")
+# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM"
+st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
 st.markdown("""
     <style>
     .main { background-color: #f4f7f6; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 12px; border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .plotly-graph-div { min-height: 400px !important; }
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 15px; border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    div[data-testid="stExpander"] { background-color: #ffffff; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CABEÇALHO
-st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Análise Técnica de Volatilidade | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+# 2. CABEÇALHO DINÂMICO
+col_logo, col_tit = st.columns([1, 6])
+with col_tit:
+    st.title("AgroVision Pro AI 🛰️")
+    st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+
 st.markdown("---")
 
-# 3. SIDEBAR
-st.sidebar.header("📋 Cadastro")
-nome_fazenda = st.sidebar.text_input("Propriedade", "Fazenda Santa Fé")
-nome_tecnico = st.sidebar.text_input("Técnico", "Anderson Silva")
-conf_threshold = st.sidebar.slider("Sensibilidade IA", 0.01, 1.0, 0.15)
+# 3. FICHA TÉCNICA E CONTROLE (SIDEBAR)
+st.sidebar.header("📋 Cadastro de Campo")
+with st.sidebar.expander("Identificação", expanded=True):
+    nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
+    nome_tecnico = st.text_input("Responsável Técnico", "Seu Nome")
+    tipo_plantio = st.selectbox("Cultura Atual", ["Soja", "Milho", "Algodão", "Cana", "Outros"])
+    safra = st.text_input("Ciclo / Safra", "2025/2026")
+    talhao_id = st.text_input("Identificação do Talhão", "Talhão 01")
 
-# 4. FUNÇÃO GPS
+with st.sidebar.expander("Configurações de IA"):
+    conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
+    st.info("Ajuste a sensibilidade se a IA estiver ignorando pragas pequenas.")
+
+# 4. FUNÇÃO DE GEOLOCALIZAÇÃO
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -43,109 +53,127 @@ def extrair_gps_st(img_file):
     except: return None
     return None
 
-# 5. UPLOAD
-uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+# 5. ÁREA DE UPLOAD
+uploaded_files = st.file_uploader(
+    "📂 ARRASTE AS FOTOS DA VARREDURA (Apenas JPG, PNG)", 
+    accept_multiple_files=True, 
+    type=['jpg', 'jpeg', 'png']
+)
 
 if uploaded_files:
-    @st.cache_resource
-    def load_yolo():
-        return YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
-    
-    model = load_yolo()
+    model = YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
     dados_lavoura = []
+    
+    st.write("### ⚙️ Processando Inteligência Artificial...")
     progresso = st.progress(0)
     
     for i, file in enumerate(uploaded_files):
         try:
             img = Image.open(file)
             results = model.predict(source=img, conf=conf_threshold)
-            img_com_caixas = results[0].plot() 
-            img_com_caixas = Image.fromarray(img_com_caixas[:, :, ::-1])
             
             file.seek(0)
             coords = extrair_gps_st(file)
             num_pragas = len(results[0].boxes)
             
-            # AGRUPAMENTO POR SETOR (Cria um setor a cada 5 fotos para a vela)
-            setor_num = (i // 5) + 1
+            # LÓGICA DE AGRUPAMENTO: Define um grupo/bloco a cada 10 fotos
+            grupo_id = (i // 10) + 1
             
             dados_lavoura.append({
-                "Amostra": f"Ponto {i+1:02d}", 
-                "Setor": f"Setor {setor_num:02d}",
+                "Amostra": file.name, 
                 "Pragas": num_pragas,
+                "Grupo": f"Bloco {grupo_id}",
                 "Lat": coords[0] if coords else None, 
-                "Lon": coords[1] if coords else None,
-                "Imagem_Proc": img_com_caixas
+                "Lon": coords[1] if coords else None
             })
             progresso.progress((i + 1) / len(uploaded_files))
         except Exception: continue
 
     if dados_lavoura:
         df = pd.DataFrame(dados_lavoura)
+        total_encontrado = df['Pragas'].sum()
+        media_ponto = df['Pragas'].mean()
+
+        # 6. MÉTRICAS DE IMPACTO
+        st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Técnico", nome_tecnico)
+        k2.metric("Cultura", tipo_plantio)
+        k3.metric("Total Detectado", f"{total_encontrado} un")
+        status_sanitario = "CRÍTICO" if total_encontrado > 20 else "NORMAL"
+        k4.metric("Status Sanitário", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
+
+        st.markdown("---")
+
+        # 7. MAPA E CENTRO DE INTELIGÊNCIA
+        col_mapa, col_intel = st.columns([1.6, 1])
         
-        # --- CÁLCULO PARA O GRÁFICO DE VELAS ---
-        # Agrupamos por Setor para pegar Min (Low), Max (High), First (Open), Last (Close)
-        df_candle = df.groupby('Setor')['Pragas'].agg(['min', 'max', 'first', 'last']).reset_index()
+        with col_mapa:
+            st.subheader("📍 Georreferenciamento de Pragas")
+            df_geo = df.dropna(subset=['Lat', 'Lon'])
+            if not df_geo.empty:
+                m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
+                for _, row in df_geo.iterrows():
+                    cor_ponto = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
+                    folium.CircleMarker(
+                        location=[row['Lat'], row['Lon']],
+                        radius=10 + row['Pragas'],
+                        color=cor_ponto, fill=True, fill_opacity=0.7
+                    ).add_to(m)
+                st_folium(m, width="100%", height=500)
+            else:
+                st.warning("⚠️ Fotos sem metadados de GPS.")
 
-        # 6. MÉTRICAS (KPIs)
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Amostras", len(df))
-        k2.metric("Média Geral", f"{df['Pragas'].mean():.1f}")
-        k3.metric("Pico Máximo", f"{int(df['Pragas'].max())} un")
+        with col_intel:
+            st.subheader("📈 Análise de Volatilidade")
+            
+            # --- NOVO GRÁFICO DE VELAS (Substituindo o Ranking) ---
+            # Agrupamos os dados para calcular os componentes da vela por bloco de 10
+            df_candle = df.groupby('Grupo')['Pragas'].agg(
+                Low='min',
+                High='max',
+                Open='first',
+                Close='last'
+            ).reset_index()
 
+            fig_candle = go.Figure(data=[go.Candlestick(
+                x=df_candle['Grupo'],
+                open=df_candle['Open'],
+                high=df_candle['High'],
+                low=df_candle['Low'],
+                close=df_candle['Close'],
+                increasing_line_color='#ef4444', # Vermelho para alta
+                decreasing_line_color='#059669'  # Verde para baixa
+            )])
+
+            fig_candle.update_layout(
+                title="Volatilidade de Pragas (Blocos de 10)",
+                xaxis_rangeslider_visible=False,
+                height=400,
+                margin=dict(l=10, r=10, t=40, b=10),
+                template="plotly_white"
+            )
+            st.plotly_chart(fig_candle, use_container_width=True)
+
+            # Velocímetro abaixo das velas
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number",
+                value = media_ponto,
+                title = {'text': "Média Geral / Ponto", 'font': {'size': 16}},
+                gauge = {'axis': {'range': [None, 50]}, 'bar': {'color': "#1b5e20"}}
+            ))
+            fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+
+        # 8. RECOMENDAÇÃO TÉCNICA
         st.markdown("---")
+        with st.container():
+            st.subheader("💡 Recomendação de Manejo (IA)")
+            if status_sanitario == "CRÍTICO":
+                st.error(f"**Atenção {nome_tecnico}:** O talhão apresenta volatilidade alta nos blocos vermelhos. Intervenção necessária em {tipo_plantio}.")
+            else:
+                st.success(f"Níveis controlados em **{nome_fazenda}**. Monitoramento segue rotina.")
 
-        # 7. GRÁFICOS (Velocímetro e Velas abaixo dele)
-        st.subheader("📊 Pressão de Infestação (Média)")
-        fig_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number",
-            value = df['Pragas'].mean(),
-            gauge = {
-                'axis': {'range': [0, 50]},
-                'bar': {'color': "#1b5e20"},
-                'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [30, 50], 'color': "#ffcdd2"}]
-            }
-        ))
-        fig_gauge.update_layout(height=250, margin=dict(l=30, r=30, t=50, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
-
-        st.subheader("🕯️ Volatilidade Técnica por Setor")
-        # Gráfico de Candlestick
-        fig_candle = go.Figure(data=[go.Candlestick(
-            x=df_candle['Setor'],
-            open=df_candle['first'],
-            high=df_candle['max'],
-            low=df_candle['min'],
-            close=df_candle['last'],
-            increasing_line_color='#ef4444', # Vermelho se a infestação subiu no setor
-            decreasing_line_color='#059669'  # Verde se a infestação baixou ou é pouca
-        )])
-
-        fig_candle.update_layout(
-            height=450,
-            xaxis_rangeslider_visible=False,
-            margin=dict(l=10, r=10, t=10, b=10),
-            template="plotly_white",
-            yaxis_title="Qtd. Pragas"
-        )
-        st.plotly_chart(fig_candle, use_container_width=True)
-
-        # 8. EVIDÊNCIAS E MAPA (Para provar o dado)
-        st.markdown("---")
-        st.subheader("📍 Localização dos Focos")
-        df_geo = df.dropna(subset=['Lat', 'Lon'])
-        if not df_geo.empty:
-            m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
-            for _, row in df_geo.iterrows():
-                cor = 'red' if row['Pragas'] > 15 else 'green'
-                folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
-            st_folium(m, width="100%", height=400)
-
-        st.markdown("---")
-        st.subheader("📸 Evidências Críticas (Top 10)")
-        piores = df.nlargest(10, 'Pragas')
-        for _, row in piores.iterrows():
-            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
-
-else:
-    st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard técnico.")
+        # 9. TABELA
+        with st.expander("Ver Dados Brutos"):
+            st.dataframe(df, use_container_width=True)
