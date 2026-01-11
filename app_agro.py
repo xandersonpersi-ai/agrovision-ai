@@ -23,12 +23,13 @@ st.markdown("""
 
 # 2. CABEÇALHO
 st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Análise de Volatilidade e Diagnóstico Digital | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"Análise Técnica de Volatilidade | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
 # 3. SIDEBAR
 st.sidebar.header("📋 Cadastro")
 nome_fazenda = st.sidebar.text_input("Propriedade", "Fazenda Santa Fé")
+nome_tecnico = st.sidebar.text_input("Técnico", "Anderson Silva")
 conf_threshold = st.sidebar.slider("Sensibilidade IA", 0.01, 1.0, 0.15)
 
 # 4. FUNÇÃO GPS
@@ -43,7 +44,7 @@ def extrair_gps_st(img_file):
     return None
 
 # 5. UPLOAD
-uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA ANÁLISE DE VELAS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
     @st.cache_resource
@@ -65,12 +66,12 @@ if uploaded_files:
             coords = extrair_gps_st(file)
             num_pragas = len(results[0].boxes)
             
-            # Agrupamento para as Velas (Setores de 5 em 5 amostras)
-            setor_idx = (i // 5) + 1
+            # AGRUPAMENTO POR SETOR (Cria um setor a cada 5 fotos para a vela)
+            setor_num = (i // 5) + 1
             
             dados_lavoura.append({
                 "Amostra": f"Ponto {i+1:02d}", 
-                "Setor": f"Setor {setor_idx:02d}",
+                "Setor": f"Setor {setor_num:02d}",
                 "Pragas": num_pragas,
                 "Lat": coords[0] if coords else None, 
                 "Lon": coords[1] if coords else None,
@@ -82,38 +83,56 @@ if uploaded_files:
     if dados_lavoura:
         df = pd.DataFrame(dados_lavoura)
         
-        # --- LÓGICA DO GRÁFICO DE VELAS (CANDLESTICK) ---
-        # Calculamos Min, Max, Primeiro e Último valor de cada setor
+        # --- CÁLCULO PARA O GRÁFICO DE VELAS ---
+        # Agrupamos por Setor para pegar Min (Low), Max (High), First (Open), Last (Close)
         df_candle = df.groupby('Setor')['Pragas'].agg(['min', 'max', 'first', 'last']).reset_index()
 
-        st.subheader("🕯️ Volatilidade de Infestação por Setor")
+        # 6. MÉTRICAS (KPIs)
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Amostras", len(df))
+        k2.metric("Média Geral", f"{df['Pragas'].mean():.1f}")
+        k3.metric("Pico Máximo", f"{int(df['Pragas'].max())} un")
+
+        st.markdown("---")
+
+        # 7. GRÁFICOS (Velocímetro e Velas abaixo dele)
+        st.subheader("📊 Pressão de Infestação (Média)")
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = df['Pragas'].mean(),
+            gauge = {
+                'axis': {'range': [0, 50]},
+                'bar': {'color': "#1b5e20"},
+                'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [30, 50], 'color': "#ffcdd2"}]
+            }
+        ))
+        fig_gauge.update_layout(height=250, margin=dict(l=30, r=30, t=50, b=20))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
+        st.subheader("🕯️ Volatilidade Técnica por Setor")
+        # Gráfico de Candlestick
         fig_candle = go.Figure(data=[go.Candlestick(
             x=df_candle['Setor'],
             open=df_candle['first'],
             high=df_candle['max'],
             low=df_candle['min'],
             close=df_candle['last'],
-            increasing_line_color='#ef4444', # Vermelho: Infestação subindo no setor
-            decreasing_line_color='#059669'  # Verde: Infestação baixando/estável
+            increasing_line_color='#ef4444', # Vermelho se a infestação subiu no setor
+            decreasing_line_color='#059669'  # Verde se a infestação baixou ou é pouca
         )])
-        
+
         fig_candle.update_layout(
-            xaxis_rangeslider_visible=False,
             height=450,
+            xaxis_rangeslider_visible=False,
             margin=dict(l=10, r=10, t=10, b=10),
-            template="plotly_white"
+            template="plotly_white",
+            yaxis_title="Qtd. Pragas"
         )
         st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 6. MÉTRICAS
+        # 8. EVIDÊNCIAS E MAPA (Para provar o dado)
         st.markdown("---")
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Total Amostras", len(df))
-        k2.metric("Pico no Talhão", f"{df['Pragas'].max()} un")
-        k3.metric("Média Geral", f"{df['Pragas'].mean():.1f}")
-
-        # 7. MAPA
-        st.subheader("📍 Mapa de Calor")
+        st.subheader("📍 Localização dos Focos")
         df_geo = df.dropna(subset=['Lat', 'Lon'])
         if not df_geo.empty:
             m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
@@ -122,12 +141,11 @@ if uploaded_files:
                 folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
             st_folium(m, width="100%", height=400)
 
-        # 8. EVIDÊNCIAS DO TOP 10
         st.markdown("---")
-        st.subheader("📸 Pontos Mais Críticos (Evidências)")
+        st.subheader("📸 Evidências Críticas (Top 10)")
         piores = df.nlargest(10, 'Pragas')
         for _, row in piores.iterrows():
-            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} ({row['Setor']}) - {row['Pragas']} pragas", use_container_width=True)
+            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
 
 else:
-    st.info("💡 Pronto para análise. Arraste as fotos para gerar o gráfico de velas.")
+    st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard técnico.")
