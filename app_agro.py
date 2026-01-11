@@ -36,7 +36,7 @@ with st.sidebar.expander("Identificação", expanded=True):
     talhao_id = st.text_input("Identificação do Talhão", "Talhão 01")
 
 with st.sidebar.expander("Configurações de IA"):
-    conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
+    conf_threshold = st.sidebar.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
 
 # 4. FUNÇÃO GPS
 def extrair_gps_st(img_file):
@@ -53,7 +53,6 @@ def extrair_gps_st(img_file):
 uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS DA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
-    # Carregamento do modelo (YOLO trabalha localmente/offline)
     model = YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
     dados_lavoura = []
     st.write("### ⚙️ Processando Inteligência Artificial...")
@@ -75,12 +74,16 @@ if uploaded_files:
                 "Pragas": num_pragas,
                 "Lat": coords[0] if coords else None, 
                 "Lon": coords[1] if coords else None,
-                "Imagem_Proc": img_com_caixas
+                "Imagem_Proc": img_com_caixas,
+                "Data": datetime.now().strftime('%d/%m/%Y'),
+                "Fazenda": nome_fazenda,
+                "Tecnico": nome_tecnico,
+                "Talhao": talhao_id,
+                "Cultura": tipo_plantio
             })
             progresso.progress((i + 1) / len(uploaded_files))
         except: continue
 
-    # TUDO DAQUI PARA BAIXO DEVE ESTAR ALINHADO DENTRO DO "if dados_lavoura:"
     if dados_lavoura:
         df = pd.DataFrame(dados_lavoura)
         total_encontrado = df['Pragas'].sum()
@@ -88,12 +91,12 @@ if uploaded_files:
         status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
         # 6. SUMÁRIO EXECUTIVO (KPIs)
-        st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
+        st.markdown(f"### 📊 Relatório de Infestação: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
-        k2.metric("Cultura", tipo_plantio)
-        k3.metric("Total Detectado", f"{int(total_encontrado)} un")
-        k4.metric("Status", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
+        k2.metric("Cultura/Safra", f"{tipo_plantio} | {safra}")
+        k3.metric("Total Detectado", f"{int(total_encontrado)} pragas")
+        k4.metric("Status Sanitário", status_sanitario, delta="Ação Necessária" if status_sanitario == "CRÍTICO" else "Sob Controle")
 
         st.markdown("---")
 
@@ -101,28 +104,24 @@ if uploaded_files:
         col_mapa, col_intel = st.columns([1.6, 1])
         
         with col_mapa:
-            st.subheader("📍 Georreferenciamento")
+            st.subheader("📍 Mapa de Calor e Localização")
             df_geo = df.dropna(subset=['Lat', 'Lon'])
             if not df_geo.empty:
-                m = folium.Map(
-                    location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], 
-                    zoom_start=18,
-                    tiles=None 
-                )
-                folium.TileLayer('OpenStreetMap', control=False).add_to(m) 
-                
+                m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18, tiles=None)
+                folium.TileLayer('OpenStreetMap', name="Mapa Base", control=False).add_to(m)
                 for _, row in df_geo.iterrows():
                     cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-                    folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
+                    folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True, popup=f"{row['Pragas']} pragas").add_to(m)
                 st_folium(m, width="100%", height=500)
             else:
-                st.warning("⚠️ Fotos sem metadados de GPS.")
+                st.warning("⚠️ Atenção: Fotos sem GPS. O mapa de localização não pôde ser gerado.")
 
         with col_intel:
-            st.subheader("📈 Análise Técnica")
+            st.subheader("📈 Análise de Pressão")
+            # Velocímetro Original com Faixas de Risco
             fig_gauge = go.Figure(go.Indicator(
                 mode = "gauge+number", value = media_ponto,
-                title = {'text': "Média Pragas / Ponto"},
+                title = {'text': "Pressão Média (Pragas/Foto)", 'font': {'size': 16}},
                 gauge = {
                     'axis': {'range': [0, 50]},
                     'bar': {'color': "#1b5e20"},
@@ -135,45 +134,61 @@ if uploaded_files:
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-            st.write("**🕯️ Volatilidade: Top 10 Pontos**")
+            # Gráfico de Velas (Candlestick) - Top 10 Pontos Críticos
+            st.write("**🕯️ Volatilidade de Infestação (Top 10)**")
             df_top10 = df.nlargest(10, 'Pragas')
             fig_candle = go.Figure(data=[go.Candlestick(
                 x=df_top10['Amostra'], 
-                open=df_top10['Pragas']*0.9, 
+                open=df_top10['Pragas']*0.85, 
                 high=df_top10['Pragas'],
-                low=df_top10['Pragas']*0.7, 
-                close=df_top10['Pragas']*0.95,
-                increasing_line_color='#991b1b', 
-                decreasing_line_color='#991b1b'
+                low=df_top10['Pragas']*0.6, 
+                close=df_top10['Pragas']*0.9,
+                increasing_line_color='#b71c1c', 
+                decreasing_line_color='#b71c1c'
             )])
-            fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
+            fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0), template="plotly_white")
             st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 8. RECOMENDAÇÃO TÉCNICA
+        # 8. RECOMENDAÇÃO TÉCNICA ESTRUTURADA
         st.markdown("---")
-        st.subheader("💡 Recomendação de Manejo (IA)")
-        rec_col1, rec_col2 = st.columns([1, 3])
-        with rec_col1:
-            if status_sanitario == "CRÍTICO": st.error("ALTA INFESTAÇÃO")
-            else: st.success("BAIXA INFESTAÇÃO")
-        with rec_col2:
-            if status_sanitario == "CRÍTICO":
-                st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Recomenda-se aplicação localizada conforme o mapa.")
-            else:
-                st.write(f"Níveis controlados em **{nome_fazenda}**. Continue o monitoramento.")
+        with st.container():
+            st.subheader("💡 Parecer Técnico Automático")
+            rec_col1, rec_col2 = st.columns([1, 2])
+            with rec_col1:
+                if status_sanitario == "CRÍTICO":
+                    st.error("🚨 ALERTA: Nível de dano econômico atingido.")
+                else:
+                    st.success("✅ MONITORAMENTO: Nível de infestação tolerável.")
+            with rec_col2:
+                texto_rec = f"Relatório gerado para a unidade **{talhao_id}**. Com base na detecção por IA, a cultura de **{tipo_plantio}** apresenta uma média de **{media_ponto:.1f}** pragas por ponto amostral. "
+                if status_sanitario == "CRÍTICO":
+                    texto_rec += "Recomenda-se controle imediato nos focos de alta pressão (marcados em vermelho) para evitar perda de produtividade."
+                else:
+                    texto_rec += "Manter o cronograma de vistorias a cada 7 dias."
+                st.write(texto_rec)
 
-        # 9. DADOS BRUTOS E EXPORTAÇÃO
+        # 9. DADOS BRUTOS ENRIQUECIDOS (PARA EXPORTAÇÃO)
         st.markdown("---")
-        with st.expander("📊 Ver Dados Brutos e Exportar", expanded=False):
-            st.dataframe(df.drop(columns=['Imagem_Proc']), use_container_width=True)
-            csv = df.drop(columns=['Imagem_Proc']).to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Baixar Relatório CSV", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+        with st.expander("📊 Relatório Detalhado de Dados (Clique para Exportar)", expanded=False):
+            # Criamos um DataFrame limpo para o CSV, contendo todos os campos de cadastro
+            df_report = df.drop(columns=['Imagem_Proc'])
+            st.write(f"**Dados consolidados do Talhão: {talhao_id}**")
+            st.dataframe(df_report, use_container_width=True)
+            
+            csv_data = df_report.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Exportar Relatório Técnico (CSV)",
+                data=csv_data,
+                file_name=f"Relatorio_IA_{nome_fazenda}_{talhao_id}.csv",
+                mime="text/csv",
+                help="O arquivo CSV contém todas as coordenadas, contagens e dados de cadastro para integração em BI ou Excel."
+            )
 
         # 10. GALERIA DE EVIDÊNCIAS
-        st.subheader("📸 Galeria de Focos Críticos (Evidências IA)")
+        st.subheader("📸 Evidências Visuais (Focos de Alta Pressão)")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
-            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
+            st.image(row['Imagem_Proc'], caption=f"Amostra: {row['Amostra']} | Detecção: {row['Pragas']} pragas | Talhão: {row['Talhao']}", use_container_width=True)
             st.markdown("---")
 
 else:
-    st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard.")
+    st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard completo.")
