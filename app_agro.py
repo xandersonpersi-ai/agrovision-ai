@@ -40,7 +40,6 @@ with st.sidebar.expander("Identificação", expanded=True):
 
 with st.sidebar.expander("Configurações de IA"):
     conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
-    st.info("Ajuste a sensibilidade se a IA estiver ignorando pragas pequenas.")
 
 # 4. FUNÇÃO DE GEOLOCALIZAÇÃO
 def extrair_gps_st(img_file):
@@ -71,18 +70,13 @@ if uploaded_files:
         try:
             img = Image.open(file)
             results = model.predict(source=img, conf=conf_threshold)
-            
             file.seek(0)
             coords = extrair_gps_st(file)
             num_pragas = len(results[0].boxes)
             
-            # LÓGICA DE AGRUPAMENTO: Define um grupo/bloco a cada 10 fotos
-            grupo_id = (i // 10) + 1
-            
             dados_lavoura.append({
                 "Amostra": file.name, 
                 "Pragas": num_pragas,
-                "Grupo": f"Bloco {grupo_id}",
                 "Lat": coords[0] if coords else None, 
                 "Lon": coords[1] if coords else None
             })
@@ -94,7 +88,7 @@ if uploaded_files:
         total_encontrado = df['Pragas'].sum()
         media_ponto = df['Pragas'].mean()
 
-        # 6. MÉTRICAS DE IMPACTO
+        # 6. MÉTRICAS (KPIs)
         st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
@@ -105,7 +99,7 @@ if uploaded_files:
 
         st.markdown("---")
 
-        # 7. MAPA E CENTRO DE INTELIGÊNCIA
+        # 7. MAPA E INTELIGÊNCIA
         col_mapa, col_intel = st.columns([1.6, 1])
         
         with col_mapa:
@@ -118,62 +112,60 @@ if uploaded_files:
                     folium.CircleMarker(
                         location=[row['Lat'], row['Lon']],
                         radius=10 + row['Pragas'],
-                        color=cor_ponto, fill=True, fill_opacity=0.7
+                        color=cor_ponto, fill=True, fill_opacity=0.7,
+                        popup=f"Amostra: {row['Amostra']}<br>Detectado: {row['Pragas']} pragas"
                     ).add_to(m)
                 st_folium(m, width="100%", height=500)
-            else:
-                st.warning("⚠️ Fotos sem metadados de GPS.")
+            else: st.warning("⚠️ Fotos sem GPS.")
 
         with col_intel:
-            st.subheader("📈 Análise de Volatilidade")
+            st.subheader("📈 Análise de Pressão")
             
-            # --- NOVO GRÁFICO DE VELAS (Substituindo o Ranking) ---
-            # Agrupamos os dados para calcular os componentes da vela por bloco de 10
-            df_candle = df.groupby('Grupo')['Pragas'].agg(
-                Low='min',
-                High='max',
-                Open='first',
-                Close='last'
-            ).reset_index()
-
-            fig_candle = go.Figure(data=[go.Candlestick(
-                x=df_candle['Grupo'],
-                open=df_candle['Open'],
-                high=df_candle['High'],
-                low=df_candle['Low'],
-                close=df_candle['Close'],
-                increasing_line_color='#ef4444', # Vermelho para alta
-                decreasing_line_color='#059669'  # Verde para baixa
-            )])
-
-            fig_candle.update_layout(
-                title="Volatilidade de Pragas (Blocos de 10)",
-                xaxis_rangeslider_visible=False,
-                height=400,
-                margin=dict(l=10, r=10, t=40, b=10),
-                template="plotly_white"
-            )
-            st.plotly_chart(fig_candle, use_container_width=True)
-
-            # Velocímetro abaixo das velas
+            # VOLTOU O GAUGE ORIGINAL
             fig_gauge = go.Figure(go.Indicator(
                 mode = "gauge+number",
                 value = media_ponto,
-                title = {'text': "Média Geral / Ponto", 'font': {'size': 16}},
-                gauge = {'axis': {'range': [None, 50]}, 'bar': {'color': "#1b5e20"}}
+                title = {'text': "Média de Pragas / Ponto", 'font': {'size': 18}},
+                gauge = {
+                    'axis': {'range': [None, 50]},
+                    'bar': {'color': "#1b5e20"},
+                    'steps': [
+                        {'range': [0, 15], 'color': "#c8e6c9"},
+                        {'range': [15, 30], 'color': "#fff9c4"},
+                        {'range': [30, 50], 'color': "#ffcdd2"}]
+                }
             ))
-            fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+            fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-        # 8. RECOMENDAÇÃO TÉCNICA
-        st.markdown("---")
-        with st.container():
-            st.subheader("💡 Recomendação de Manejo (IA)")
-            if status_sanitario == "CRÍTICO":
-                st.error(f"**Atenção {nome_tecnico}:** O talhão apresenta volatilidade alta nos blocos vermelhos. Intervenção necessária em {tipo_plantio}.")
-            else:
-                st.success(f"Níveis controlados em **{nome_fazenda}**. Monitoramento segue rotina.")
+            # NOVO GRÁFICO DE VELAS (Baseado no Top 10 Crítico)
+            st.write("**🔥 Volatilidade: Top 10 Pontos Críticos**")
+            df_top10 = df.nlargest(10, 'Pragas').reset_index()
+            
+            # Criamos a lógica da vela: Pavio é o valor real, corpo simula a margem de erro da IA
+            fig_candle = go.Figure(data=[go.Candlestick(
+                x=df_top10['Amostra'],
+                open=df_top10['Pragas'] * 0.9,
+                high=df_top10['Pragas'],
+                low=df_top10['Pragas'] * 0.8,
+                close=df_top10['Pragas'] * 0.95,
+                increasing_line_color='#991b1b', decreasing_line_color='#991b1b'
+            )])
+            fig_candle.update_layout(height=300, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0), template="plotly_white")
+            st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 9. TABELA
+        # 8. RECOMENDAÇÃO
+        st.markdown("---")
+        st.subheader("💡 Recomendação de Manejo (IA)")
+        if total_encontrado > 20:
+            st.error(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Aplicação necessária.")
+        else:
+            st.success(f"Níveis controlados em **{nome_fazenda}**.")
+
+        # 9. DADOS BRUTOS E DOWNLOAD (RECUPERADO)
         with st.expander("Ver Dados Brutos"):
             st.dataframe(df, use_container_width=True)
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button("📥 Exportar Relatório CSV", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+else:
+    st.info("💡 Arraste as fotos para gerar o diagnóstico.")
