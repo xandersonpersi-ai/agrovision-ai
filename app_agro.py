@@ -53,6 +53,7 @@ def extrair_gps_st(img_file):
 uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS DA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
+    # Carregamento do modelo (YOLO trabalha localmente/offline)
     model = YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
     dados_lavoura = []
     st.write("### ⚙️ Processando Inteligência Artificial...")
@@ -79,6 +80,7 @@ if uploaded_files:
             progresso.progress((i + 1) / len(uploaded_files))
         except: continue
 
+    # TUDO DAQUI PARA BAIXO DEVE ESTAR ALINHADO DENTRO DO "if dados_lavoura:"
     if dados_lavoura:
         df = pd.DataFrame(dados_lavoura)
         total_encontrado = df['Pragas'].sum()
@@ -97,26 +99,24 @@ if uploaded_files:
 
         # 7. MAPA E CENTRO DE INTELIGÊNCIA
         col_mapa, col_intel = st.columns([1.6, 1])
-        # No trecho do Mapa, substitua por isso para evitar travamentos offline:
-
-with col_mapa:
-    st.subheader("📍 Georreferenciamento")
-    df_geo = df.dropna(subset=['Lat', 'Lon'])
-    if not df_geo.empty:
-        # Se estiver offline, o fundo pode sumir, mas os pontos de GPS (bolinhas) 
-        # e a escala de distância continuam funcionando 100%
-        m = folium.Map(
-            location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], 
-            zoom_start=18,
-            tiles=None # Isso evita que o app tente baixar o mapa da internet e trave
-        )
-       
-        folium.TileLayer('OpenStreetMap', control=False).add_to(m) 
         
-        for _, row in df_geo.iterrows():
-            cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-            folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
-        st_folium(m, width="100%", height=500)
+        with col_mapa:
+            st.subheader("📍 Georreferenciamento")
+            df_geo = df.dropna(subset=['Lat', 'Lon'])
+            if not df_geo.empty:
+                m = folium.Map(
+                    location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], 
+                    zoom_start=18,
+                    tiles=None 
+                )
+                folium.TileLayer('OpenStreetMap', control=False).add_to(m) 
+                
+                for _, row in df_geo.iterrows():
+                    cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
+                    folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
+                st_folium(m, width="100%", height=500)
+            else:
+                st.warning("⚠️ Fotos sem metadados de GPS.")
 
         with col_intel:
             st.subheader("📈 Análise Técnica")
@@ -135,13 +135,16 @@ with col_mapa:
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-            # VELAS DOS 10 PONTOS CRÍTICOS
             st.write("**🕯️ Volatilidade: Top 10 Pontos**")
             df_top10 = df.nlargest(10, 'Pragas')
             fig_candle = go.Figure(data=[go.Candlestick(
-                x=df_top10['Amostra'], open=df_top10['Pragas']*0.9, high=df_top10['Pragas'],
-                low=df_top10['Pragas']*0.7, close=df_top10['Pragas']*0.95,
-                increasing_line_color='#991b1b', decreasing_line_color='#991b1b'
+                x=df_top10['Amostra'], 
+                open=df_top10['Pragas']*0.9, 
+                high=df_top10['Pragas'],
+                low=df_top10['Pragas']*0.7, 
+                close=df_top10['Pragas']*0.95,
+                increasing_line_color='#991b1b', 
+                decreasing_line_color='#991b1b'
             )])
             fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_candle, use_container_width=True)
@@ -155,18 +158,18 @@ with col_mapa:
             else: st.success("BAIXA INFESTAÇÃO")
         with rec_col2:
             if status_sanitario == "CRÍTICO":
-                st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Recomenda-se a aplicação localizada conforme o mapa para a cultura de {tipo_plantio}.")
+                st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta focos severos. Recomenda-se aplicação localizada conforme o mapa.")
             else:
                 st.write(f"Níveis controlados em **{nome_fazenda}**. Continue o monitoramento.")
 
-        # 9. DADOS BRUTOS (MOVIDO PARA CIMA DA GALERIA)
+        # 9. DADOS BRUTOS E EXPORTAÇÃO
         st.markdown("---")
         with st.expander("📊 Ver Dados Brutos e Exportar", expanded=False):
             st.dataframe(df.drop(columns=['Imagem_Proc']), use_container_width=True)
             csv = df.drop(columns=['Imagem_Proc']).to_csv(index=False).encode('utf-8')
             st.download_button("📥 Baixar Relatório CSV", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
 
-        # 10. GALERIA DE EVIDÊNCIAS (FINAL DO RELATÓRIO)
+        # 10. GALERIA DE EVIDÊNCIAS
         st.subheader("📸 Galeria de Focos Críticos (Evidências IA)")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
             st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} - {row['Pragas']} pragas", use_container_width=True)
@@ -174,4 +177,3 @@ with col_mapa:
 
 else:
     st.info("💡 Pronto para análise. Arraste as fotos para gerar o dashboard.")
-
