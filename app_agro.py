@@ -15,19 +15,21 @@ st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide", pa
 
 st.markdown("""
     <style>
-    .main { background-color: #F8FAFC; }
-    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 6px solid #059669; }
+    .main { background-color: #f4f7f6; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 12px; border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .plotly-graph-div { min-height: 400px !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # 2. CABEÇALHO
 st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Análise Técnica de Volatilidade de Pragas | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"Análise de Volatilidade e Diagnóstico Digital | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown("---")
 
 # 3. SIDEBAR
-st.sidebar.header("⚙️ Parâmetros")
+st.sidebar.header("📋 Cadastro")
 nome_fazenda = st.sidebar.text_input("Propriedade", "Fazenda Santa Fé")
-conf_threshold = st.sidebar.slider("Sensibilidade IA", 0.01, 1.0, 0.20)
+conf_threshold = st.sidebar.slider("Sensibilidade IA", 0.01, 1.0, 0.15)
 
 # 4. FUNÇÃO GPS
 def extrair_gps_st(img_file):
@@ -41,7 +43,7 @@ def extrair_gps_st(img_file):
     return None
 
 # 5. UPLOAD
-uploaded_files = st.file_uploader("📂 SUBIR VARREDURA PARA ANÁLISE DE VELAS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA ANÁLISE DE VELAS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
     @st.cache_resource
@@ -50,59 +52,82 @@ if uploaded_files:
     
     model = load_yolo()
     dados_lavoura = []
+    progresso = st.progress(0)
     
     for i, file in enumerate(uploaded_files):
         try:
             img = Image.open(file)
             results = model.predict(source=img, conf=conf_threshold)
+            img_com_caixas = results[0].plot() 
+            img_com_caixas = Image.fromarray(img_com_caixas[:, :, ::-1])
+            
+            file.seek(0)
+            coords = extrair_gps_st(file)
             num_pragas = len(results[0].boxes)
             
-            # Criando "Sectores" fictícios para gerar as velas (ex: Setor A, B, C...)
-            setor = f"Setor {chr(65 + (i // 5))}" 
+            # Agrupamento para as Velas (Setores de 5 em 5 amostras)
+            setor_idx = (i // 5) + 1
             
             dados_lavoura.append({
-                "Setor": setor,
+                "Amostra": f"Ponto {i+1:02d}", 
+                "Setor": f"Setor {setor_idx:02d}",
                 "Pragas": num_pragas,
-                "Amostra": file.name
+                "Lat": coords[0] if coords else None, 
+                "Lon": coords[1] if coords else None,
+                "Imagem_Proc": img_com_caixas
             })
-        except: continue
+            progresso.progress((i + 1) / len(uploaded_files))
+        except Exception: continue
 
     if dados_lavoura:
         df = pd.DataFrame(dados_lavoura)
         
-        # Agrupando dados para criar a lógica de Candle (Vela)
-        # Open = média inicial, Close = média final, High = max pragas, Low = min pragas
-        df_candle = df.groupby('Setor')['Pragas'].agg(['mean', 'max', 'min', 'first', 'last']).reset_index()
+        # --- LÓGICA DO GRÁFICO DE VELAS (CANDLESTICK) ---
+        # Calculamos Min, Max, Primeiro e Último valor de cada setor
+        df_candle = df.groupby('Setor')['Pragas'].agg(['min', 'max', 'first', 'last']).reset_index()
 
-        st.markdown("### 🕯️ Análise de Volatilidade por Setor")
-        st.caption("Este gráfico mostra a variação e os picos de pragas em cada região da fazenda.")
-
-        # 6. GRÁFICO DE VELAS (CANDLESTICK)
+        st.subheader("🕯️ Volatilidade de Infestação por Setor")
         fig_candle = go.Figure(data=[go.Candlestick(
             x=df_candle['Setor'],
             open=df_candle['first'],
             high=df_candle['max'],
             low=df_candle['min'],
             close=df_candle['last'],
-            increasing_line_color= '#ef4444', # Vermelho se a infestação subiu no setor
-            decreasing_line_color= '#059669'  # Verde se a infestação caiu ou é baixa
+            increasing_line_color='#ef4444', # Vermelho: Infestação subindo no setor
+            decreasing_line_color='#059669'  # Verde: Infestação baixando/estável
         )])
-
+        
         fig_candle.update_layout(
+            xaxis_rangeslider_visible=False,
             height=450,
             margin=dict(l=10, r=10, t=10, b=10),
-            xaxis_rangeslider_visible=False,
             template="plotly_white"
         )
         st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 7. MÉTRICAS BÁSICAS
-        c1, c2 = st.columns(2)
-        c1.metric("Setor mais Crítico", df_candle.loc[df_candle['max'].idxmax()]['Setor'])
-        c2.metric("Pico de Pragas Encontrado", int(df['Pragas'].max()))
-
+        # 6. MÉTRICAS
         st.markdown("---")
-        st.info("💡 **Dica para o Investidor:** Velas vermelhas longas indicam setores com alta instabilidade e necessidade de intervenção pesada.")
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Total Amostras", len(df))
+        k2.metric("Pico no Talhão", f"{df['Pragas'].max()} un")
+        k3.metric("Média Geral", f"{df['Pragas'].mean():.1f}")
+
+        # 7. MAPA
+        st.subheader("📍 Mapa de Calor")
+        df_geo = df.dropna(subset=['Lat', 'Lon'])
+        if not df_geo.empty:
+            m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
+            for _, row in df_geo.iterrows():
+                cor = 'red' if row['Pragas'] > 15 else 'green'
+                folium.CircleMarker([row['Lat'], row['Lon']], radius=10, color=cor, fill=True).add_to(m)
+            st_folium(m, width="100%", height=400)
+
+        # 8. EVIDÊNCIAS DO TOP 10
+        st.markdown("---")
+        st.subheader("📸 Pontos Mais Críticos (Evidências)")
+        piores = df.nlargest(10, 'Pragas')
+        for _, row in piores.iterrows():
+            st.image(row['Imagem_Proc'], caption=f"{row['Amostra']} ({row['Setor']}) - {row['Pragas']} pragas", use_container_width=True)
 
 else:
-    st.info("Aguardando fotos para gerar análise de velas...")
+    st.info("💡 Pronto para análise. Arraste as fotos para gerar o gráfico de velas.")
