@@ -9,79 +9,85 @@ from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE COM ANIMAÇÕES CSS
+# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM ANIMAÇÕES
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
 st.markdown("""
     <style>
-    /* Animação de entrada suave */
-    @keyframes fadeIn {
+    /* Animação de entrada para os elementos */
+    @keyframes fadeInUp {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
     }
     
-    .main { background-color: #f0f4f2; }
+    .main { background-color: #f4f7f6; }
     
-    /* Cards que flutuam ao passar o mouse */
-    .stMetric {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 15px;
-        border-top: 5px solid #2e7d32;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        transition: all 0.3s ease;
+    /* Seus KPIs agora com sombra suave e flutuação ao passar o mouse */
+    .stMetric { 
+        background-color: #ffffff; 
+        padding: 20px; 
+        border-radius: 15px; 
+        border-top: 5px solid #2e7d32; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
     .stMetric:hover {
         transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
     }
 
-    /* Botão Localizar com Pulso e Brilho */
+    /* O BOTÃO DE LOCALIZAÇÃO - Agora com gradiente e pulso ao passar o mouse */
     .loc-btn {
         display: inline-block;
-        padding: 16px 20px;
+        padding: 15px 25px;
         font-size: 16px;
         cursor: pointer;
         text-align: center;
         text-decoration: none;
+        outline: none;
         color: #fff;
         background: linear-gradient(45deg, #d32f2f, #f44336);
         border: none;
-        border-radius: 12px;
+        border-radius: 10px;
         font-weight: bold;
         width: 100%;
-        transition: 0.3s;
-        box-shadow: 0 4px 15px rgba(211, 47, 47, 0.3);
+        box-shadow: 0 4px #991b1b;
+        transition: all 0.2s ease;
     }
     .loc-btn:hover {
         background: linear-gradient(45deg, #b71c1c, #d32f2f);
         transform: scale(1.02);
-        box-shadow: 0 6px 20px rgba(211, 47, 47, 0.5);
     }
-    
-    /* Container de animação para as seções */
-    .animated-section {
-        animation: fadeIn 0.8s ease-out;
+    .loc-btn:active {
+        box-shadow: 0 1px #661010;
+        transform: translateY(3px);
+    }
+
+    /* Container para aplicar animação nas seções do relatório */
+    .report-section {
+        animation: fadeInUp 0.6s ease-out;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CABEÇALHO
+# 2. CABEÇALHO DINÂMICO
 st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Inteligência Geográfica de Pragas | {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. SIDEBAR (CADASTRO)
-st.sidebar.header("📋 Monitoramento")
-with st.sidebar.expander("📝 Dados da Área", expanded=True):
-    nome_fazenda = st.text_input("Fazenda", "Santa Fé")
-    nome_tecnico = st.text_input("Técnico", "Anderson Silva")
-    tipo_plantio = st.selectbox("Cultura", ["Soja", "Milho", "Algodão", "Cana"])
-    talhao_id = st.text_input("Talhão", "01")
+# 3. FICHA TÉCNICA E CONTROLE (SIDEBAR COMPLETA)
+st.sidebar.header("📋 Cadastro de Campo")
+with st.sidebar.expander("Identificação", expanded=True):
+    nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
+    nome_tecnico = st.text_input("Responsável Técnico", "Anderson Silva")
+    tipo_plantio = st.selectbox("Cultura Atual", ["Soja", "Milho", "Algodão", "Cana", "Outros"])
+    safra = st.text_input("Ciclo / Safra", "2025/2026")
+    talhao_id = st.text_input("Identificação do Talhão", "Talhão 01")
 
-conf_threshold = st.sidebar.slider("Precisão da IA", 0.1, 0.9, 0.25)
+with st.sidebar.expander("Configurações de IA"):
+    conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
 
-# 4. FUNÇÕES DE SUPORTE
+# 4. FUNÇÃO GPS E LINK GOOGLE MAPS
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -92,85 +98,143 @@ def extrair_gps_st(img_file):
     except: return None
     return None
 
-# 5. PROCESSAMENTO
-uploaded_files = st.file_uploader("🚀 SOLTE AS FOTOS AQUI", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+def link_google_maps(lat, lon):
+    if lat != "N/A":
+        return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+    return "Sem GPS"
+
+# 5. UPLOAD E PROCESSAMENTO IA
+uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
     model = YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
-    dados = []
+    dados_lavoura = []
+    progresso = st.progress(0)
     
-    with st.spinner('🤖 IA está varrendo o talhão...'):
-        for i, file in enumerate(uploaded_files):
+    for i, file in enumerate(uploaded_files):
+        try:
             img = Image.open(file)
             results = model.predict(source=img, conf=conf_threshold)
-            img_res = Image.fromarray(results[0].plot()[:, :, ::-1])
+            img_com_caixas = results[0].plot() 
+            img_com_caixas = Image.fromarray(img_com_caixas[:, :, ::-1])
             
             file.seek(0)
             coords = extrair_gps_st(file)
             lat, lon = (coords[0], coords[1]) if coords else ("N/A", "N/A")
             
-            dados.append({
-                "Amostra": file.name, "Pragas": len(results[0].boxes),
-                "Lat": lat, "Lon": lon, "_img": img_res,
-                "Maps": f"https://www.google.com/maps/search/?api=1&query={lat},{lon}" if lat != "N/A" else "#"
+            dados_lavoura.append({
+                "Amostra": file.name, 
+                "Pragas": len(results[0].boxes),
+                "Latitude": lat, 
+                "Longitude": lon,
+                "Maps_Link": link_google_maps(lat, lon),
+                "Fazenda": nome_fazenda,
+                "Safra": safra,
+                "Talhao": talhao_id,
+                "Cultura": tipo_plantio,
+                "Data": datetime.now().strftime('%d/%m/%Y'),
+                "_img_obj": img_com_caixas
             })
+            progresso.progress((i + 1) / len(uploaded_files))
+        except: continue
 
-    if dados:
-        df = pd.DataFrame(dados)
-        media = df['Pragas'].mean()
-        
-        # 6. DASHBOARD ANIMADO (KPIs)
-        st.markdown('<div class="animated-section">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Propriedade", nome_fazenda)
-        c2.metric("Talhão", talhao_id)
-        c3.metric("Total Pragas", int(df['Pragas'].sum()))
-        c4.metric("Status", "CRÍTICO" if media > 15 else "OK", delta="- Alerta" if media > 15 else "+ Normal")
-        
+    if dados_lavoura:
+        df = pd.DataFrame(dados_lavoura)
+        total_pragas = df['Pragas'].sum()
+        media_ponto = df['Pragas'].mean()
+        status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
+
+        # TUDO ABAIXO ESTÁ DENTRO DA DIV ANIMADA
+        st.markdown('<div class="report-section">', unsafe_allow_html=True)
+
+        # 6. SUMÁRIO EXECUTIVO (KPIs)
+        st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric("Técnico", nome_tecnico)
+        k2.metric("Cultura/Safra", f"{tipo_plantio} | {safra}")
+        k3.metric("Total Detectado", f"{int(total_pragas)} un")
+        k4.metric("Status", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
+
         st.markdown("---")
 
-        # 7. MAPA E GRÁFICOS
-        col_m, col_g = st.columns([1.5, 1])
-        with col_m:
-            st.subheader("📍 Mapa de Calor")
-            df_geo = df[df['Lat'] != "N/A"]
+        # 7. MAPA E CENTRO DE INTELIGÊNCIA
+        col_mapa, col_intel = st.columns([1.6, 1])
+        with col_mapa:
+            st.subheader("📍 Georreferenciamento")
+            df_geo = df[df['Latitude'] != "N/A"]
             if not df_geo.empty:
-                m = folium.Map(location=[df_geo['Lat'].mean(), df_geo['Lon'].mean()], zoom_start=18)
-                for _, r in df_geo.iterrows():
-                    folium.CircleMarker([r['Lat'], r['Lon']], radius=10, color='red' if r['Pragas']>15 else 'green', fill=True).add_to(m)
-                st_folium(m, width="100%", height=450)
+                m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18, tiles=None)
+                folium.TileLayer('OpenStreetMap', control=False).add_to(m)
+                for _, row in df_geo.iterrows():
+                    cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
+                    folium.CircleMarker([row['Latitude'], row['Longitude']], radius=10, color=cor, fill=True).add_to(m)
+                st_folium(m, width="100%", height=500)
 
-        with col_g:
-            st.subheader("📊 Pressão de Pragas")
-            fig = go.Figure(go.Indicator(mode="gauge+number", value=media, gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#2e7d32"}}))
-            fig.update_layout(height=300, margin=dict(l=20, r=20, t=20, b=20))
-            st.plotly_chart(fig, use_container_width=True)
+        with col_intel:
+            st.subheader("📈 Análise Técnica")
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number", value = media_ponto,
+                title = {'text': "Média Pragas / Ponto"},
+                gauge = {'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
+                         'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [15, 30], 'color': "#fff9c4"}, {'range': [30, 50], 'color': "#ffcdd2"}]}))
+            fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
 
-        # 8. DOWNLOAD
+            # VELAS DOS 10 PONTOS CRÍTICOS
+            st.write("**🕯️ Volatilidade: Top 10 Pontos**")
+            df_top10 = df.nlargest(10, 'Pragas')
+            fig_candle = go.Figure(data=[go.Candlestick(
+                x=df_top10['Amostra'], open=df_top10['Pragas']*0.9, high=df_top10['Pragas'],
+                low=df_top10['Pragas']*0.7, close=df_top10['Pragas']*0.95,
+                increasing_line_color='#991b1b', decreasing_line_color='#991b1b')])
+            fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig_candle, use_container_width=True)
+
+        # 8. RECOMENDAÇÃO TÉCNICA
         st.markdown("---")
-        with st.expander("📂 Exportar Dados para Excel"):
-            df_ex = df.drop(columns=['_img'])
-            csv = df_ex.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Baixar Relatório Completo", csv, "agro_report.csv", "text/csv")
+        st.subheader("💡 Parecer Técnico Automático")
+        rec_col1, rec_col2 = st.columns([1, 3])
+        with rec_col1:
+            if status_sanitario == "CRÍTICO": st.error("ALTA INFESTAÇÃO")
+            else: st.success("BAIXA INFESTAÇÃO")
+        with rec_col2:
+            st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas. " + 
+                     ("Recomenda-se controle imediato." if status_sanitario == "CRÍTICO" else "Níveis controlados."))
 
-        # 9. GALERIA DE EVIDÊNCIAS COM BOTÃO ANIMADO
-        st.subheader("📸 Evidências com Navegação GPS")
+        # 9. DADOS BRUTOS E DOWNLOAD (EXCEL-READY)
+        st.markdown("---")
+        with st.expander("📊 Ver Dados Detalhados e Exportar"):
+            df_export = df.drop(columns=['_img_obj'])
+            st.dataframe(df_export, use_container_width=True)
+            csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+            st.download_button("📥 Baixar Relatório para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+
+        # 10. GALERIA COM BOTÃO DE LOCALIZAÇÃO (NOVIDADE)
+        st.markdown("---")
+        st.subheader("📸 Galeria de Focos e Navegação GPS")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
-            g1, g2 = st.columns([1.6, 1])
+            g1, g2 = st.columns([1.5, 1])
             with g1:
-                st.image(row['_img'], use_container_width=True)
+                st.image(row['_img_obj'], use_container_width=True)
             with g2:
+                # Card de info estilizado ao lado da imagem
                 st.markdown(f"""
-                <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #ddd;">
-                    <h3>🪲 {row['Pragas']} Pragas</h3>
+                <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+                    <h3 style="margin-top:0;">🪲 {row['Pragas']} Pragas</h3>
                     <p><b>Amostra:</b> {row['Amostra']}</p>
-                    <p><b>Ponto GPS:</b> {row['Lat']}, {row['Lon']}</p>
+                    <p><b>Lat/Lon:</b> {row['Latitude']}, {row['Longitude']}</p>
                     <hr>
-                    <a href="{row['Maps']}" target="_blank" style="text-decoration: none;">
-                        <div class="loc-btn">📍 LOCALIZAR NO MAPA</div>
-                    </a>
-                    <p style="font-size: 12px; color: #666; margin-top: 10px; text-align: center;">Clique para abrir rota GPS</p>
-                </div>
                 """, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+                
+                if row['Latitude'] != "N/A":
+                    st.markdown(f'<a href="{row["Maps_Link"]}" target="_blank"><button class="loc-btn">📍 LOCALIZAR NO MAPA</button></a>', unsafe_allow_html=True)
+                else:
+                    st.warning("⚠️ GPS não disponível nesta foto.")
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("---")
+        
+        st.markdown('</div>', unsafe_allow_html=True) # Fim da div animada
+
+else:
+    st.info("💡 Aguardando fotos para processamento...")
