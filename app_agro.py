@@ -1,5 +1,4 @@
 import streamlit as st
-import pd as pd
 import pandas as pd
 from ultralytics import YOLO
 from exif import Image as ExifImage
@@ -44,7 +43,6 @@ st.markdown(f"""
 
 @st.cache_resource
 def load_model():
-    # Tenta carregar o modelo treinado, senão usa o padrão
     return YOLO('best.pt' if os.path.exists('best.pt') else 'yolov8n.pt')
 
 model = load_model()
@@ -94,7 +92,6 @@ if modo_operacao == "🛸 Drone Real-Time":
     if run_drone:
         cam_source = int(rtsp_url) if rtsp_url.isdigit() else rtsp_url
         camera = cv2.VideoCapture(cam_source)
-        st.toast("Conectando ao Drone...", icon="🛸")
         
         while run_drone:
             ret, frame = camera.read()
@@ -105,11 +102,10 @@ if modo_operacao == "🛸 Drone Real-Time":
             results = model.predict(frame, conf=conf_threshold, verbose=False)
             annotated_frame = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
             FRAME_WINDOW.image(annotated_frame)
-            st.caption(f"Monitorando Talhão: {talhao_id} | Focos em tempo real: {len(results[0].boxes)}")
             
         camera.release()
     else:
-        st.info("Sistema em Stand-by. Ative o toggle para iniciar o streaming.")
+        st.info("Sistema em Stand-by. Ative o botão acima para conectar.")
 
 # 6. MODO ANALISAR FOTOS
 else:
@@ -186,7 +182,7 @@ else:
                 fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig_candle, use_container_width=True)
 
-            # PARECER TÉCNICO COMPLETO
+            # PARECER TÉCNICO COMPLETO COM CICLO/SAFRA
             st.markdown("---")
             st.subheader("💡 Recomendação Técnica")
             rec_col1, rec_col2 = st.columns([1, 3])
@@ -201,20 +197,14 @@ else:
                 if status_sanitario == "CRÍTICO":
                     texto_laudo += "⚠️ **Ação Recomendada:** Os níveis ultrapassaram o limite econômico. Sugere-se intervenção imediata."
                 else:
-                    texto_laudo += "👍 **Ação Recomendada:** Níveis sob controle. Manter o cronograma de monitoramento."
+                    texto_laudo += "👍 **Ação Recomendada:** Níveis sob controle para este estágio do ciclo. Manter monitoramento."
                 st.info(texto_laudo)
 
-            # BOTÃO DE EXPORTAÇÃO (SOMENTE BOTÃO)
+            # EXPORTAÇÃO
             st.markdown("---")
             df_export = df.drop(columns=['_img_obj'])
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button(
-                label="📥 Baixar CSV para Excel (Completo)",
-                data=csv,
-                file_name=f"Relatorio_{nome_fazenda}_{safra}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+            st.download_button(label="📥 Baixar CSV para Excel", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
 
             # GALERIA
             st.subheader("📸 Detalhes dos Focos (GPS)")
@@ -235,6 +225,5 @@ else:
                     """, unsafe_allow_html=True)
                 st.markdown("---")
             st.markdown('</div>', unsafe_allow_html=True)
-
-else:
-    st.info("💡 Escolha um modo de operação na barra lateral para começar.")
+    else:
+        st.info("💡 Arraste fotos ou use o modo Drone na barra lateral.")
