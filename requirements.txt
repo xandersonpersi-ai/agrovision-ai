@@ -8,3 +8,4 @@ exif
 Pillow
 plotly
 fpdf
+mysql-connector-python
