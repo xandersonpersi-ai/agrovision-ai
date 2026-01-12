@@ -9,39 +9,37 @@ from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM ANIMAÇÕES E NEON
+# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM NEON AZUL #68CAED
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
-st.markdown("""
+st.markdown(f"""
     <style>
-    /* Animação de entrada para os elementos */
-    @keyframes fadeInUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
+    @keyframes fadeInUp {{
+        from {{ opacity: 0; transform: translateY(20px); }}
+        to {{ opacity: 1; transform: translateY(0); }}
+    }}
     
-    /* ANIMAÇÃO DO PULSO NEON */
-    @keyframes neonPulse {
-        0% { box-shadow: 0 0 5px #ff4b4b, 0 0 10px #ff4b4b; }
-        50% { box-shadow: 0 0 20px #ff4b4b, 0 0 30px #ff0000; }
-        100% { box-shadow: 0 0 5px #ff4b4b, 0 0 10px #ff4b4b; }
-    }
+    /* ANIMAÇÃO DO PULSO NEON EM AZUL #68CAED */
+    @keyframes neonPulse {{
+        0% {{ box-shadow: 0 0 5px #68CAED, 0 0 10px #68CAED; }}
+        50% {{ box-shadow: 0 0 20px #68CAED, 0 0 30px #68CAED; }}
+        100% {{ box-shadow: 0 0 5px #68CAED, 0 0 10px #68CAED; }}
+    }}
 
-    .main { background-color: #f4f7f6; }
+    .main {{ background-color: #f4f7f6; }}
     
-    /* Seus KPIs com flutuação */
-    .stMetric { 
+    .stMetric {{ 
         background-color: #ffffff; 
         padding: 20px; 
         border-radius: 15px; 
         border-top: 5px solid #2e7d32; 
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         transition: transform 0.3s ease;
-    }
-    .stMetric:hover { transform: translateY(-5px); }
+    }}
+    .stMetric:hover {{ transform: translateY(-5px); }}
 
-    /* O BOTÃO COM NEON PULSANTE */
-    .loc-btn {
+    /* O BOTÃO COM SUA COR PERSONALIZADA #68CAED */
+    .loc-btn {{
         display: inline-block;
         padding: 15px 25px;
         font-size: 16px;
@@ -49,36 +47,34 @@ st.markdown("""
         text-align: center;
         text-decoration: none;
         color: #fff;
-        background: linear-gradient(45deg, #d32f2f, #ff4b4b);
+        background: #68CAED; /* Sua cor aqui */
         border: none;
         border-radius: 12px;
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
-        /* Aplicação do Neon Pulsante */
         animation: neonPulse 2s infinite ease-in-out;
         text-transform: uppercase;
         letter-spacing: 1px;
-    }
+    }}
     
-    .loc-btn:hover {
-        background: linear-gradient(45deg, #ff0000, #d32f2f);
+    .loc-btn:hover {{
+        background: #4ab8db; /* Um tom levemente mais escuro para o hover */
         transform: scale(1.03);
-        animation: none; /* Para o pulso e fica brilho fixo no hover */
-        box-shadow: 0 0 40px #ff0000;
+        box-shadow: 0 0 40px #68CAED;
         color: #fff;
-    }
+    }}
 
-    .report-section { animation: fadeInUp 0.6s ease-out; }
+    .report-section {{ animation: fadeInUp 0.6s ease-out; }}
     </style>
     """, unsafe_allow_html=True)
 
-# 2. CABEÇALHO DINÂMICO
+# 2. CABEÇALHO
 st.title("AgroVision Pro AI 🛰️")
 st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. FICHA TÉCNICA E CONTROLE (SIDEBAR COMPLETA)
+# 3. FICHA TÉCNICA (SIDEBAR)
 st.sidebar.header("📋 Cadastro de Campo")
 with st.sidebar.expander("Identificação", expanded=True):
     nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
@@ -90,7 +86,7 @@ with st.sidebar.expander("Identificação", expanded=True):
 with st.sidebar.expander("Configurações de IA"):
     conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
 
-# 4. FUNÇÃO GPS E LINK GOOGLE MAPS
+# 4. FUNÇÕES GPS
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -103,10 +99,10 @@ def extrair_gps_st(img_file):
 
 def link_google_maps(lat, lon):
     if lat != "N/A":
-        return f"http://www.google.com/maps/search/?api=1&query={lat},{lon}"
-    return "Sem GPS"
+        return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+    return "#"
 
-# 5. UPLOAD E PROCESSAMENTO IA
+# 5. UPLOAD E IA
 uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
@@ -126,16 +122,11 @@ if uploaded_files:
             lat, lon = (coords[0], coords[1]) if coords else ("N/A", "N/A")
             
             dados_lavoura.append({
-                "Amostra": file.name, 
-                "Pragas": len(results[0].boxes),
-                "Latitude": lat, 
-                "Longitude": lon,
+                "Amostra": file.name, "Pragas": len(results[0].boxes),
+                "Latitude": lat, "Longitude": lon,
                 "Maps_Link": link_google_maps(lat, lon),
-                "Fazenda": nome_fazenda,
-                "Safra": safra,
-                "Talhao": talhao_id,
-                "Cultura": tipo_plantio,
-                "Data": datetime.now().strftime('%d/%m/%Y'),
+                "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
+                "Cultura": tipo_plantio, "Data": datetime.now().strftime('%d/%m/%Y'),
                 "_img_obj": img_com_caixas
             })
             progresso.progress((i + 1) / len(uploaded_files))
@@ -149,7 +140,7 @@ if uploaded_files:
 
         st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-        # 6. SUMÁRIO EXECUTIVO (KPIs)
+        # 6. SUMÁRIO
         st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
@@ -159,7 +150,7 @@ if uploaded_files:
 
         st.markdown("---")
 
-        # 7. MAPA E CENTRO DE INTELIGÊNCIA
+        # 7. MAPA E GRÁFICOS
         col_mapa, col_intel = st.columns([1.6, 1])
         with col_mapa:
             st.subheader("📍 Georreferenciamento")
@@ -175,42 +166,29 @@ if uploaded_files:
             st.subheader("📈 Análise Técnica")
             fig_gauge = go.Figure(go.Indicator(
                 mode = "gauge+number", value = media_ponto,
-                title = {'text': "Média Pragas / Ponto"},
                 gauge = {'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
                          'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [15, 30], 'color': "#fff9c4"}, {'range': [30, 50], 'color': "#ffcdd2"}]}))
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-            # VELAS DOS 10 PONTOS CRÍTICOS
+            # TOP 10 CANDLESTICK
             st.write("**🕯️ Volatilidade: Top 10 Pontos**")
             df_top10 = df.nlargest(10, 'Pragas')
             fig_candle = go.Figure(data=[go.Candlestick(
                 x=df_top10['Amostra'], open=df_top10['Pragas']*0.9, high=df_top10['Pragas'],
                 low=df_top10['Pragas']*0.7, close=df_top10['Pragas']*0.95,
-                increasing_line_color='#991b1b', decreasing_line_color='#991b1b')])
+                increasing_line_color='#68CAED', decreasing_line_color='#68CAED')])
             fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 8. RECOMENDAÇÃO TÉCNICA
+        # 8. EXPORTAR
         st.markdown("---")
-        st.subheader("💡 Parecer Técnico Automático")
-        rec_col1, rec_col2 = st.columns([1, 3])
-        with rec_col1:
-            if status_sanitario == "CRÍTICO": st.error("ALTA INFESTAÇÃO")
-            else: st.success("BAIXA INFESTAÇÃO")
-        with rec_col2:
-            st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas.")
-
-        # 9. DADOS BRUTOS E DOWNLOAD
-        st.markdown("---")
-        with st.expander("📊 Ver Dados Detalhados e Exportar"):
+        with st.expander("📊 Exportar Relatório"):
             df_export = df.drop(columns=['_img_obj'])
-            st.dataframe(df_export, use_container_width=True)
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Baixar Relatório para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+            st.download_button("📥 Baixar CSV para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
 
-        # 10. GALERIA COM BOTÃO NEON
-        st.markdown("---")
+        # 9. GALERIA COM BOTÃO NEON AZUL #68CAED
         st.subheader("📸 Galeria de Focos e Navegação GPS")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
             g1, g2 = st.columns([1.5, 1])
