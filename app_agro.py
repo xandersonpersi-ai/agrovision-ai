@@ -178,7 +178,7 @@ if uploaded_files:
             fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 8. NOVIDADE: PARECER TÉCNICO AUTOMÁTICO (RESTAURADO)
+        # 8. PARECER TÉCNICO AUTOMÁTICO
         st.markdown("---")
         st.subheader("💡 Parecer Técnico Automático")
         rec_col1, rec_col2 = st.columns([1, 3])
@@ -198,13 +198,17 @@ if uploaded_files:
                 texto_recomendacao += "👍 **Ação Recomendada:** Os níveis estão sob controle. Manter monitoramento semanal conforme o ciclo da cultura."
             st.info(texto_recomendacao)
 
-        # 9. EXPORTAR
+        # 9. EXPORTAR (APENAS O BOTÃO)
         st.markdown("---")
-        with st.expander("📊 Exportar Dados Detalhados"):
-            df_export = df.drop(columns=['_img_obj'])
-            st.dataframe(df_export, use_container_width=True)
-            csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button("📥 Baixar CSV para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
+        df_export = df.drop(columns=['_img_obj'])
+        csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+        st.download_button(
+            label="📥 Baixar CSV para Excel",
+            data=csv,
+            file_name=f"Relatorio_{nome_fazenda}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
 
         # 10. GALERIA
         st.subheader("📸 Galeria de Focos e Navegação GPS")
