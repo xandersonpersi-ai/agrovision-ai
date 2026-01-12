@@ -44,12 +44,7 @@ def load_model():
 
 model = load_model()
 
-# 2. CABEÇALHO
-st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
-st.markdown("---")
-
-# 3. SIDEBAR
+# 2. CENTRAL DE COMANDO (SIDEBAR) - Captura de variáveis globais
 st.sidebar.header("🕹️ Central de Comando")
 with st.sidebar.expander("📋 Cadastro de Campo", expanded=True):
     nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
@@ -65,7 +60,7 @@ if st.sidebar.button("🗑️ Limpar Todos os Dados", use_container_width=True):
     st.session_state.dados_analise = None
     st.rerun()
 
-# 4. FUNÇÕES AUXILIARES
+# 3. FUNÇÕES AUXILIARES
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -79,7 +74,11 @@ def extrair_gps_st(img_file):
 def link_google_maps(lat, lon):
     return f"https://www.google.com/maps?q={lat},{lon}" if lat is not None and lat != "N/A" else "#"
 
-# 5. PROCESSAMENTO DE IMAGENS
+# 4. PROCESSAMENTO DE IMAGENS
+st.title("AgroVision Pro AI 🛰️")
+st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+st.markdown("---")
+
 st.subheader("📂 Varredura de Imagens")
 uploaded_files = st.file_uploader("Arraste as fotos para análise técnica", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
@@ -103,8 +102,7 @@ if uploaded_files:
                         "Amostra": file.name, "Pragas": len(results[0].boxes),
                         "Latitude": lat if lat else "N/A", "Longitude": lon if lon else "N/A",
                         "Fonte": fonte, "Maps_Link": link_google_maps(lat, lon),
-                        "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
-                        "Cultura": tipo_plantio, "Tecnico": nome_tecnico, "_img_obj": img_plot
+                        "_img_obj": img_plot
                     })
             except: continue
     
@@ -115,7 +113,7 @@ if uploaded_files:
         else:
             st.session_state.dados_analise = pd.concat([st.session_state.dados_analise, df_novos], ignore_index=True)
 
-# 6. RELATÓRIO DINÂMICO
+# 5. RELATÓRIO DINÂMICO (Atualização em tempo real com a Sidebar)
 if st.session_state.dados_analise is not None and not st.session_state.dados_analise.empty:
     df = st.session_state.dados_analise
     media_ponto = df['Pragas'].mean()
@@ -135,19 +133,18 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
     
     col_mapa, col_intel = st.columns([1.6, 1])
     with col_mapa:
-        st.subheader("📍 Georreferenciamento de Pragas")
+        st.subheader("📍 Georreferenciamento")
         df_geo = df[df['Latitude'] != "N/A"]
         if not df_geo.empty:
             m = folium.Map(location=[df_geo['Latitude'].astype(float).mean(), df_geo['Longitude'].astype(float).mean()], zoom_start=17)
             for _, row in df_geo.iterrows():
                 cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
                 folium.CircleMarker([row['Latitude'], row['Longitude']], radius=12, color=cor, fill=True, popup=f"{row['Amostra']}").add_to(m)
-            st_folium(m, use_container_width=True, height=550, key="mapa_final")
+            st_folium(m, use_container_width=True, height=480, key="mapa_final")
 
     with col_intel:
         st.subheader("📈 Inteligência de Dados")
-        
-        # 1. Gauge (Gráfico de Pressão)
+        # 1. Gauge
         fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=media_ponto, 
             title={'text': "Média Pragas/Ponto"},
             gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
@@ -155,7 +152,7 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=0))
         st.plotly_chart(fig_gauge, use_container_width=True)
         
-        # 2. Candlestick (Gráfico de Velas de Volatilidade)
+        # 2. Candlestick
         st.write("**🕯️ Volatilidade da Infestação**")
         df_top = df.nlargest(5, 'Pragas')
         fig_candle = go.Figure(data=[go.Candlestick(x=df_top['Amostra'], 
@@ -164,13 +161,7 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 3. Bar Chart (Gráfico de Barras de Top Focos)
-        st.write("**📊 Top 5 Focos Críticos**")
-        fig_bar = go.Figure(go.Bar(x=df_top['Pragas'], y=df_top['Amostra'], orientation='h', marker_color='#2e7d32'))
-        fig_bar.update_layout(height=180, margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-    # LAUDO TÉCNICO E EXPORTAÇÃO
+    # LAUDO TÉCNICO
     st.markdown("---")
     st.subheader("💡 Laudo e Recomendação")
     rec_col1, rec_col2 = st.columns([1, 3])
@@ -178,10 +169,18 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         if status_sanitario == "CRÍTICO": st.error("🚨 INFESTAÇÃO ALTA")
         else: st.success("✅ SITUAÇÃO SOB CONTROLE")
     with rec_col2:
-        st.info(f"O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas por ponto. {'Intervenção química recomendada.' if status_sanitario == 'CRÍTICO' else 'Seguir com monitoramento padrão.'}")
+        st.info(f"O talhão **{talhao_id}** da fazenda **{nome_fazenda}** apresenta média de **{media_ponto:.1f}** pragas/ponto. Diagnóstico realizado por **{nome_tecnico}**.")
 
-    csv = df.drop(columns=['_img_obj', 'id']).to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-    st.download_button("📥 Baixar Relatório Full (Excel)", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
+    # DOWNLOAD ATUALIZADO (Adiciona as colunas da Sidebar na hora de baixar)
+    df_export = df.copy()
+    df_export['Fazenda'] = nome_fazenda
+    df_export['Tecnico'] = nome_tecnico
+    df_export['Cultura'] = tipo_plantio
+    df_export['Safra'] = safra
+    df_export['Talhao'] = talhao_id
+    
+    csv = df_export.drop(columns=['_img_obj', 'id']).to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    st.download_button("📥 Baixar Relatório Full (Excel)", data=csv, file_name=f"Relatorio_{nome_fazenda}_{talhao_id}.csv", use_container_width=True)
 
     # GALERIA
     st.subheader("📸 Detalhes das Amostras")
@@ -202,3 +201,5 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
                 st.session_state.dados_analise = st.session_state.dados_analise.drop(index).reset_index(drop=True)
                 st.rerun()
         st.markdown("---")
+else:
+    st.info("Aguardando upload de fotos para gerar o diagnóstico...")
