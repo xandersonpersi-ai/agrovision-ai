@@ -14,31 +14,28 @@ import numpy as np
 # 1. CONFIGURAÇÃO DE INTERFACE PREMIUM
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
-# CSS para correção de bugs visual e animações
-st.markdown(f"""
+# Inicialização segura da memória (Session State)
+if 'dados_analise' not in st.session_state:
+    st.session_state.dados_analise = None
+
+# CSS CORRIGIDO - Sem erros de NameError
+st.markdown("""
     <style>
-    iframe {{ width: 100% !important; border-radius: 15px; }}
-    @keyframes fadeInUp {{
-        from {{ opacity: 0; transform: translateY(20px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    @keyframes neonPulseRed {{
-        0% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
-        50% {{ box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }}
-        100% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
-    }}
-    .stMetric {{ 
-        background-color: #ffffff; padding: 20px; border-radius: 15px; 
-        border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }}
-    .loc-btn {{
-        display: inline-block; padding: 15px 25px; font-size: 16px; cursor: pointer;
-        text-align: center; text-decoration: none; color: #fff; background-color: #68CAED;
-        border: 3px solid #FF0000; border-radius: 12px; font-weight: bold; width: 100%;
+    iframe { width: 100% !important; border-radius: 15px; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes neonPulseRed {
+        0% { box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }
+        50% { box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }
+        100% { box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }
+    }
+    .stMetric { background-color: #ffffff; padding: 20px; border-radius: 15px; border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .loc-btn {
+        display: inline-block; padding: 12px; font-size: 14px; cursor: pointer; text-align: center; text-decoration: none; 
+        color: #fff !important; background-color: #68CAED; border: 3px solid #FF0000; border-radius: 10px; font-weight: bold; width: 100%;
         animation: neonPulseRed 1.5s infinite ease-in-out; text-transform: uppercase;
-        letter-spacing: 1px;
-    }}
-    .report-section {{ animation: fadeInUp 0.6s ease-out; }}
+    }
+    .source-tag { font-size: 10px; background: #e3f2fd; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: #1565c0; margin-bottom: 5px; display: inline-block; }
+    .report-section { animation: fadeInUp 0.6s ease-out; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -72,162 +69,144 @@ with st.sidebar.expander("⚙️ Configurações de IA"):
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
-        if img.has_exif:
+        if img.has_exif and hasattr(img, 'gps_latitude'):
             lat = (img.gps_latitude[0] + img.gps_latitude[1]/60 + img.gps_latitude[2]/3600) * (-1 if img.gps_latitude_ref == 'S' else 1)
             lon = (img.gps_longitude[0] + img.gps_longitude[1]/60 + img.gps_longitude[2]/3600) * (-1 if img.gps_longitude_ref == 'W' else 1)
-            return lat, lon
-    except: return None
-    return None
+            return lat, lon, "🛰️ DRONE"
+    except: pass
+    return None, None, "📱 CELULAR"
 
 def link_google_maps(lat, lon):
-    return f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" else "#"
+    return f"https://www.google.com/maps?q={lat},{lon}" if lat is not None and lat != "N/A" else "#"
 
 # 5. MODO DRONE
 if modo_operacao == "🛸 Drone Real-Time":
     st.subheader("🎮 Live Stream: Monitoramento Aéreo")
     run_drone = st.toggle("🚀 ATIVAR CÂMERA DO DRONE")
     FRAME_WINDOW = st.image([]) 
-    
     if run_drone:
         cam_source = int(rtsp_url) if rtsp_url.isdigit() else rtsp_url
         camera = cv2.VideoCapture(cam_source)
         while run_drone:
             ret, frame = camera.read()
-            if not ret:
-                st.error("Falha ao receber imagem. Verifique a conexão.")
-                break
+            if not ret: break
             results = model.predict(frame, conf=conf_threshold, verbose=False)
             ann_frame = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
             FRAME_WINDOW.image(ann_frame)
         camera.release()
-    else:
-        st.info("Sistema em Stand-by.")
 
 # 6. MODO ANALISAR FOTOS
 else:
-    uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
-
+    uploaded_files = st.file_uploader("📂 ADICIONAR NOVAS FOTOS", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+    
     if uploaded_files:
-        dados_lavoura = []
+        novos_dados = []
         progresso = st.progress(0)
-        
         for i, file in enumerate(uploaded_files):
             try:
                 img = Image.open(file)
                 results = model.predict(source=img, conf=conf_threshold, verbose=False)
-                img_com_caixas = Image.fromarray(results[0].plot()[:, :, ::-1])
+                img_plot = Image.fromarray(results[0].plot()[:, :, ::-1])
                 file.seek(0)
-                coords = extrair_gps_st(file)
-                lat, lon = (coords[0], coords[1]) if coords else ("N/A", "N/A")
-                
-                dados_lavoura.append({
+                lat, lon, fonte = extrair_gps_st(file)
+                novos_dados.append({
+                    "id": f"{file.name}_{datetime.now().timestamp()}_{i}",
                     "Amostra": file.name, "Pragas": len(results[0].boxes),
-                    "Latitude": lat, "Longitude": lon, "Maps_Link": link_google_maps(lat, lon),
+                    "Latitude": lat if lat else "N/A", "Longitude": lon if lon else "N/A",
+                    "Fonte": fonte, "Maps_Link": link_google_maps(lat, lon),
                     "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
-                    "Cultura": tipo_plantio, "Data": datetime.now().strftime('%d/%m/%Y'),
-                    "Tecnico": nome_tecnico,
-                    "_img_obj": img_com_caixas
+                    "Cultura": tipo_plantio, "Tecnico": nome_tecnico, "_img_obj": img_plot
                 })
                 progresso.progress((i + 1) / len(uploaded_files))
             except: continue
+        
+        df_novos = pd.DataFrame(novos_dados)
+        if st.session_state.dados_analise is None:
+            st.session_state.dados_analise = df_novos
+        else:
+            st.session_state.dados_analise = pd.concat([st.session_state.dados_analise, df_novos], ignore_index=True)
 
-        if dados_lavoura:
-            df = pd.DataFrame(dados_lavoura)
-            media_ponto = df['Pragas'].mean()
-            status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
+# 7. EXIBIÇÃO DO RELATÓRIO DINÂMICO
+if st.session_state.dados_analise is not None and not st.session_state.dados_analise.empty:
+    df = st.session_state.dados_analise
+    media_ponto = df['Pragas'].mean()
+    status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
-            st.markdown('<div class="report-section">', unsafe_allow_html=True)
+    st.markdown('<div class="report-section">', unsafe_allow_html=True)
+    st.markdown(f"### 📊 Relatório Consolidado: {nome_fazenda}")
+    
+    # KPIs
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Técnico", nome_tecnico)
+    k2.metric("Cultura", tipo_plantio)
+    k3.metric("Safra", safra)
+    k4.metric("Total Pragas", f"{int(df['Pragas'].sum())} un")
+    k5.metric("Status", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
 
-            # KPIs COMPLETOS
-            st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
-            k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Responsável Técnico", nome_tecnico)
-            k2.metric("Cultura Atual", tipo_plantio)
-            k3.metric("Ciclo / Safra", safra)
-            k4.metric("Total Detectado", f"{int(df['Pragas'].sum())} un")
-            k5.metric("Status", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
+    st.markdown("---")
+    
+    # MAPA E GRÁFICOS
+    col_mapa, col_intel = st.columns([1.6, 1])
+    with col_mapa:
+        st.subheader("📍 Mapa de Infestação")
+        df_geo = df[df['Latitude'] != "N/A"]
+        if not df_geo.empty:
+            m = folium.Map(location=[df_geo['Latitude'].astype(float).mean(), df_geo['Longitude'].astype(float).mean()], zoom_start=18)
+            for _, row in df_geo.iterrows():
+                cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
+                folium.CircleMarker([row['Latitude'], row['Longitude']], radius=10, color=cor, fill=True, popup=f"{row['Pragas']} un").add_to(m)
+            st_folium(m, use_container_width=True, height=500, key="mapa_principal")
+        else:
+            st.warning("⚠️ Fotos sem metadados GPS. O mapa não pode ser exibido.")
 
-            st.markdown("---")
-            
-            # MAPA (COM CORREÇÃO DE BUG) E ANÁLISE TÉCNICA
-            col_mapa, col_intel = st.columns([1.6, 1])
-            with col_mapa:
-                st.subheader("📍 Georreferenciamento")
-                df_geo = df[df['Latitude'] != "N/A"]
-                if not df_geo.empty:
-                    # Centraliza o mapa e adiciona pontos
-                    m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18, control_scale=True)
-                    for _, row in df_geo.iterrows():
-                        cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-                        folium.CircleMarker(
-                            location=[row['Latitude'], row['Longitude']],
-                            radius=10,
-                            color=cor,
-                            fill=True,
-                            fill_opacity=0.7,
-                            popup=f"{row['Pragas']} pragas detectadas"
-                        ).add_to(m)
-                    # st_folium com use_container_width resolve o bug do mapa cortado
-                    st_folium(m, use_container_width=True, height=500, returned_objects=[])
-                else:
-                    st.warning("⚠️ Fotos sem metadados de GPS detectadas. O mapa não pode ser exibido.")
+    with col_intel:
+        st.subheader("📈 Pressão e Volatilidade")
+        fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=media_ponto, gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"}}))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+        
+        df_top = df.nlargest(5, 'Pragas')
+        fig_candle = go.Figure(data=[go.Candlestick(x=df_top['Amostra'], open=df_top['Pragas']*0.9, high=df_top['Pragas'], low=df_top['Pragas']*0.7, close=df_top['Pragas']*0.95)])
+        fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig_candle, use_container_width=True)
 
-            with col_intel:
-                st.subheader("📈 Análise de Pressão")
-                fig_gauge = go.Figure(go.Indicator(
-                    mode = "gauge+number", value = media_ponto,
-                    gauge = {'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
-                             'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [15, 30], 'color': "#fff9c4"}, {'range': [30, 50], 'color': "#ffcdd2"}]}))
-                fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
-                st.plotly_chart(fig_gauge, use_container_width=True)
+    # RECOMENDAÇÃO TÉCNICA
+    st.markdown("---")
+    st.subheader("💡 Recomendação Técnica")
+    rec_col1, rec_col2 = st.columns([1, 3])
+    with rec_col1:
+        if status_sanitario == "CRÍTICO": st.error("🚨 ALTA INFESTAÇÃO")
+        else: st.success("✅ BAIXA INFESTAÇÃO")
+    with rec_col2:
+        laudo = f"O técnico **{nome_tecnico}** analisou o talhão **{talhao_id}**. Média: **{media_ponto:.1f}** pragas/ponto."
+        if status_sanitario == "CRÍTICO": laudo += " ⚠️ **Intervenção recomendada imediata.**"
+        else: laudo += " 👍 **Níveis sob controle.**"
+        st.info(laudo)
 
-                st.write("**🕯️ Volatilidade de Infestação**")
-                df_top5 = df.nlargest(5, 'Pragas')
-                fig_candle = go.Figure(data=[go.Candlestick(
-                    x=df_top5['Amostra'], open=df_top5['Pragas']*0.9, high=df_top5['Pragas'],
-                    low=df_top5['Pragas']*0.7, close=df_top5['Pragas']*0.95)])
-                fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
-                st.plotly_chart(fig_candle, use_container_width=True)
+    # EXPORTAÇÃO
+    st.markdown("---")
+    df_export = df.drop(columns=['_img_obj', 'id'])
+    csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    st.download_button("📥 Exportar Relatório para Excel", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
 
-            # RECOMENDAÇÃO TÉCNICA
-            st.markdown("---")
-            st.subheader("💡 Recomendação Técnica")
-            rec_col1, rec_col2 = st.columns([1, 3])
-            with rec_col1:
-                if status_sanitario == "CRÍTICO": st.error("🚨 ALTA INFESTAÇÃO")
-                else: st.success("✅ BAIXA INFESTAÇÃO")
-            with rec_col2:
-                texto_laudo = (
-                    f"O técnico **{nome_tecnico}** realizou o diagnóstico para a cultura de **{tipo_plantio}** na safra **{safra}**. "
-                    f"Análise no talhão **{talhao_id}** indica média de **{media_ponto:.1f}** pragas por ponto. "
-                )
-                if status_sanitario == "CRÍTICO":
-                    texto_laudo += "⚠️ **Ação:** Níveis acima do limite econômico. Intervenção recomendada."
-                else:
-                    texto_laudo += "👍 **Ação:** Níveis sob controle. Manter monitoramento."
-                st.info(texto_laudo)
-
-            # EXPORTAÇÃO
-            st.markdown("---")
-            df_export = df.drop(columns=['_img_obj'])
-            csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-            st.download_button(label="📥 Baixar CSV para Excel", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
-
-            # GALERIA (AJUSTADO: APENAS CULTURA E SAFRA)
-            st.subheader("📸 Detalhes dos Focos (GPS)")
-            for _, row in df.nlargest(10, 'Pragas').iterrows():
-                g1, g2 = st.columns([1.5, 1])
-                with g1: st.image(row['_img_obj'], use_container_width=True)
-                with g2:
-                    st.markdown(f"""
-                    <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                        <h3 style="margin-top:0;">🪲 {row['Pragas']} Detectadas</h3>
-                        <p><b>Amostra:</b> {row['Amostra']}</p>
-                        <p><b>Cultura:</b> {row['Cultura']} | <b>Safra:</b> {row['Safra']}</p>
-                        <hr>
-                        <a href="{row['Maps_Link']}" target="_blank"><button class="loc-btn">📍 LOCALIZAR AGORA</button></a>
-                    </div>
-                    """, unsafe_allow_html=True)
-                st.markdown("---")
-            st.markdown('</div>', unsafe_allow_html=True)
-
+    # GALERIA COM EXCLUSÃO
+    st.markdown("---")
+    st.subheader("📸 Gerenciamento de Amostras")
+    for index, row in df.iterrows():
+        g1, g2 = st.columns([1.5, 1])
+        with g1: st.image(row['_img_obj'], use_container_width=True)
+        with g2:
+            st.markdown(f"""
+            <div style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #eee; margin-bottom:10px;">
+                <span class="source-tag">{row['Fonte']}</span>
+                <h4 style="margin:0;">🪲 {row['Pragas']} Pragas</h4>
+                <p style="font-size:12px;"><b>Arquivo:</b> {row['Amostra']}</p>
+                <hr>
+                {"<a href='"+row['Maps_Link']+"' target='_blank'><button class='loc-btn'>📍 LOCALIZAR</button></a>" if row['Latitude'] != "N/A" else "<i>Sem GPS</i>"}
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"🗑️ Remover {index}", key=f"btn_{row['id']}"):
+                st.session_state.dados_analise = st.session_state.dados_analise.drop(index).reset_index(drop=True)
+                st.rerun()
+        st.markdown("---")
+else:
+    st.info("Aguardando carregamento de fotos para análise...")
