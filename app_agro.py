@@ -124,6 +124,7 @@ else:
                     "Latitude": lat, "Longitude": lon, "Maps_Link": link_google_maps(lat, lon),
                     "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
                     "Cultura": tipo_plantio, "Data": datetime.now().strftime('%d/%m/%Y'),
+                    "Tecnico": nome_tecnico,
                     "_img_obj": img_com_caixas
                 })
                 progresso.progress((i + 1) / len(uploaded_files))
@@ -136,13 +137,14 @@ else:
 
             st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-            # KPIs (REINSERIDO CULTURA E SAFRA)
+            # KPIs (TODOS OS CAMPOS RESTAURADOS)
             st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Cultura Atual", tipo_plantio) # CAMPO RECUPERADO
-            k2.metric("Ciclo / Safra", safra)         # CAMPO RECUPERADO
-            k3.metric("Total Detectado", f"{int(df['Pragas'].sum())} un")
-            k4.metric("Status Sanitário", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("Responsável Técnico", nome_tecnico)
+            k2.metric("Cultura Atual", tipo_plantio)
+            k3.metric("Ciclo / Safra", safra)
+            k4.metric("Total Detectado", f"{int(df['Pragas'].sum())} un")
+            k5.metric("Status", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
 
             st.markdown("---")
             
@@ -175,7 +177,7 @@ else:
                 fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig_candle, use_container_width=True)
 
-            # RECOMENDAÇÃO TÉCNICA
+            # RECOMENDAÇÃO TÉCNICA (CITANDO O TÉCNICO)
             st.markdown("---")
             st.subheader("💡 Recomendação Técnica")
             rec_col1, rec_col2 = st.columns([1, 3])
@@ -184,8 +186,8 @@ else:
                 else: st.success("✅ BAIXA INFESTAÇÃO")
             with rec_col2:
                 texto_laudo = (
-                    f"O diagnóstico para a cultura de **{tipo_plantio}** na safra **{safra}** "
-                    f"indica uma média de **{media_ponto:.1f}** pragas por ponto no talhão **{talhao_id}**. "
+                    f"O técnico **{nome_tecnico}** realizou o diagnóstico para a cultura de **{tipo_plantio}** na safra **{safra}**. "
+                    f"A análise no talhão **{talhao_id}** indica uma média de **{media_ponto:.1f}** pragas por ponto. "
                 )
                 if status_sanitario == "CRÍTICO":
                     texto_laudo += "⚠️ **Ação Recomendada:** Os níveis ultrapassaram o limite econômico. Sugere-se intervenção imediata."
@@ -209,6 +211,7 @@ else:
                     <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                         <h3 style="margin-top:0;">🪲 {row['Pragas']} Detectadas</h3>
                         <p><b>Amostra:</b> {row['Amostra']}</p>
+                        <p><b>Técnico:</b> {row['Tecnico']}</p>
                         <p><b>Cultura:</b> {row['Cultura']} | <b>Safra:</b> {row['Safra']}</p>
                         <hr>
                         <a href="{row['Maps_Link']}" target="_blank"><button class="loc-btn">📍 LOCALIZAR AGORA</button></a>
