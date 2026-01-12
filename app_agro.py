@@ -14,8 +14,10 @@ import numpy as np
 # 1. CONFIGURAÇÃO DE INTERFACE PREMIUM
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
+# CSS para correção de bugs visual e animações
 st.markdown(f"""
     <style>
+    iframe {{ width: 100% !important; border-radius: 15px; }}
     @keyframes fadeInUp {{
         from {{ opacity: 0; transform: translateY(20px); }}
         to {{ opacity: 1; transform: translateY(0); }}
@@ -25,7 +27,6 @@ st.markdown(f"""
         50% {{ box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }}
         100% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
     }}
-    .main {{ background-color: #f4f7f6; }}
     .stMetric {{ 
         background-color: #ffffff; padding: 20px; border-radius: 15px; 
         border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -148,17 +149,28 @@ else:
 
             st.markdown("---")
             
-            # MAPA E ANÁLISE TÉCNICA
+            # MAPA (COM CORREÇÃO DE BUG) E ANÁLISE TÉCNICA
             col_mapa, col_intel = st.columns([1.6, 1])
             with col_mapa:
                 st.subheader("📍 Georreferenciamento")
                 df_geo = df[df['Latitude'] != "N/A"]
                 if not df_geo.empty:
-                    m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18)
+                    # Centraliza o mapa e adiciona pontos
+                    m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18, control_scale=True)
                     for _, row in df_geo.iterrows():
                         cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-                        folium.CircleMarker([row['Latitude'], row['Longitude']], radius=10, color=cor, fill=True).add_to(m)
-                    st_folium(m, width="100%", height=500)
+                        folium.CircleMarker(
+                            location=[row['Latitude'], row['Longitude']],
+                            radius=10,
+                            color=cor,
+                            fill=True,
+                            fill_opacity=0.7,
+                            popup=f"{row['Pragas']} pragas detectadas"
+                        ).add_to(m)
+                    # st_folium com use_container_width resolve o bug do mapa cortado
+                    st_folium(m, use_container_width=True, height=500, returned_objects=[])
+                else:
+                    st.warning("⚠️ Fotos sem metadados de GPS detectadas. O mapa não pode ser exibido.")
 
             with col_intel:
                 st.subheader("📈 Análise de Pressão")
