@@ -5,36 +5,71 @@ from exif import Image as ExifImage
 import folium
 from streamlit_folium import st_folium
 import os
-import sqlite3
+import mysql.connector  # Alterado para MySQL
 from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 import cv2  
 import numpy as np
 
-# --- 1. BANCO DE DADOS (SaaS Foundation) ---
+# --- 1. BANCO DE DADOS (MySQL SaaS) ---
+def get_mysql_connection():
+    # Substitua pelos dados do seu servidor MySQL
+    return mysql.connector.connect(
+        host="seu_host",
+        user="seu_usuario",
+        password="sua_senha",
+        database="agrovision_db"
+    )
+
 def init_db():
-    conn = sqlite3.connect('agrovision_saas.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS analises
-                 (id TEXT PRIMARY KEY, data TEXT, fazenda TEXT, tecnico TEXT, 
-                  cultura TEXT, safra TEXT, talhao TEXT, pragas INTEGER, 
-                  latitude REAL, longitude REAL, arquivo TEXT, fonte TEXT)''')
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_mysql_connection()
+        c = conn.cursor()
+        # Sintaxe ajustada para MySQL (VARCHAR e DATETIME)
+        c.execute('''CREATE TABLE IF NOT EXISTS analises
+                     (id VARCHAR(255) PRIMARY KEY, 
+                      data_hora DATETIME, 
+                      fazenda VARCHAR(100), 
+                      tecnico VARCHAR(100), 
+                      cultura VARCHAR(50), 
+                      safra VARCHAR(20), 
+                      talhao VARCHAR(50), 
+                      pragas INT, 
+                      latitude FLOAT, 
+                      longitude FLOAT, 
+                      arquivo VARCHAR(255), 
+                      fonte VARCHAR(50))''')
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        st.error(f"Erro ao conectar no MySQL: {e}")
 
 def salvar_no_banco(dados_lista):
-    conn = sqlite3.connect('agrovision_saas.db')
-    c = conn.cursor()
-    for d in dados_lista:
-        c.execute('''INSERT OR REPLACE INTO analises 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (d['id'], d['data'], d['fazenda'], d['tecnico'], 
-                   d['cultura'], d['safra'], d['talhao'], d['Pragas'], 
-                   d['Latitude'], d['Longitude'], d['Amostra'], d['Fonte']))
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_mysql_connection()
+        c = conn.cursor()
+        sql = """INSERT INTO analises 
+                 (id, data_hora, fazenda, tecnico, cultura, safra, talhao, pragas, latitude, longitude, arquivo, fonte) 
+                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) 
+                 ON DUPLICATE KEY UPDATE pragas=VALUES(pragas)"""
+        
+        for d in dados_lista:
+            # Converte a string de data para objeto datetime do MySQL
+            data_dt = datetime.strptime(d['data'], "%d/%m/%Y %H:%M")
+            valores = (d['id'], data_dt, d['fazenda'], d['tecnico'], 
+                       d['cultura'], d['safra'], d['talhao'], d['Pragas'], 
+                       d['Latitude'], d['Longitude'], d['Amostra'], d['Fonte'])
+            c.execute(sql, valores)
+            
+        conn.commit()
+        c.close()
+        conn.close()
+    except Exception as e:
+        st.error(f"Erro ao salvar no MySQL: {e}")
 
+# Inicializa o banco de dados MySQL
 init_db()
 
 # --- 2. INTERFACE PREMIUM ---
@@ -87,7 +122,7 @@ def extrair_gps(img_file):
 
 # --- 5. PROCESSAMENTO ---
 st.title("AgroVision Pro AI 🛰️")
-st.caption(f"Plataforma de Diagnóstico Digital | SaaS Ativo")
+st.caption(f"Plataforma de Diagnóstico Digital | SaaS Ativo (MySQL)")
 st.markdown("---")
 
 uploaded_files = st.file_uploader("📂 Entrada de Dados", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
@@ -123,7 +158,8 @@ if uploaded_files:
                         "_img_obj": img_plot
                     }
                     novos.append(item)
-            except: continue
+            except Exception as e:
+                st.error(f"Erro no processamento {file.name}: {e}")
     
     if novos:
         salvar_no_banco(novos)
@@ -163,7 +199,6 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
 
     with c_intel:
         st.subheader("📈 Inteligência")
-        # Gauge
         fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=media, 
             title={'text': "Média Pragas/Ponto"},
             gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
@@ -171,7 +206,6 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=0))
         st.plotly_chart(fig_gauge, use_container_width=True)
         
-        # Candlestick (Top 5 voláteis)
         df_top = df.nlargest(5, 'Pragas')
         fig_candle = go.Figure(data=[go.Candlestick(x=df_top['Amostra'], 
                                 open=df_top['Pragas']*0.9, high=df_top['Pragas'], 
@@ -179,7 +213,6 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig_candle, use_container_width=True)
 
-    # LAUDO E RECOMENDAÇÃO
     st.markdown('<div class="report-section">', unsafe_allow_html=True)
     st.subheader("💡 Laudo e Recomendação")
     l1, l2 = st.columns([1, 3])
@@ -190,12 +223,10 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         st.info(f"O talhão **{talhao_input}** da propriedade **{propriedade}** apresenta média de **{media:.1f}** pragas/ponto. Diagnóstico realizado por **{tecnico}**.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # DOWNLOAD FORMATADO
     st.markdown("---")
     csv = df.drop(columns=['_img_obj', 'id']).to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     st.download_button("📥 Baixar Relatório Técnico (CSV/Excel)", data=csv, file_name=f"Relatorio_{propriedade}_{talhao_input}.csv", use_container_width=True)
 
-    # GALERIA
     st.subheader("📸 Detalhes das Amostras")
     for idx, row in df.iterrows():
         g1, g2 = st.columns([1.5, 1])
