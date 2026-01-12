@@ -14,11 +14,10 @@ import numpy as np
 # 1. CONFIGURAÇÃO DE INTERFACE PREMIUM
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
-# Inicialização da memória (Session State)
 if 'dados_analise' not in st.session_state:
     st.session_state.dados_analise = None
 
-# CSS PREMIUM RESTAURADO
+# CSS PREMIUM
 st.markdown("""
     <style>
     iframe { width: 100% !important; border-radius: 15px; }
@@ -50,9 +49,8 @@ st.title("AgroVision Pro AI 🛰️")
 st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. SIDEBAR COMPLETA
+# 3. SIDEBAR
 st.sidebar.header("🕹️ Central de Comando")
-
 with st.sidebar.expander("📋 Cadastro de Campo", expanded=True):
     nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
     nome_tecnico = st.text_input("Responsável Técnico", "Anderson Silva")
@@ -62,7 +60,6 @@ with st.sidebar.expander("📋 Cadastro de Campo", expanded=True):
 
 with st.sidebar.expander("⚙️ Configurações de IA", expanded=True):
     conf_threshold = st.slider("Sensibilidade (Confiança)", 0.01, 1.0, 0.25)
-    st.info("💡 Sensibilidade menor detecta mais objetos, porém aumenta chance de alarmes falsos.")
 
 if st.sidebar.button("🗑️ Limpar Todos os Dados", use_container_width=True):
     st.session_state.dados_analise = None
@@ -82,7 +79,7 @@ def extrair_gps_st(img_file):
 def link_google_maps(lat, lon):
     return f"https://www.google.com/maps?q={lat},{lon}" if lat is not None and lat != "N/A" else "#"
 
-# 5. ÁREA DE PROCESSAMENTO (Sem Duplicação)
+# 5. PROCESSAMENTO DE IMAGENS
 st.subheader("📂 Varredura de Imagens")
 uploaded_files = st.file_uploader("Arraste as fotos para análise técnica", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
@@ -99,10 +96,8 @@ if uploaded_files:
                     img = Image.open(file)
                     results = model.predict(source=img, conf=conf_threshold, verbose=False)
                     img_plot = Image.fromarray(results[0].plot()[:, :, ::-1])
-                    
                     file.seek(0)
                     lat, lon, fonte = extrair_gps_st(file)
-                    
                     novos_dados.append({
                         "id": f"{file.name}_{datetime.now().timestamp()}_{i}",
                         "Amostra": file.name, "Pragas": len(results[0].boxes),
@@ -111,7 +106,7 @@ if uploaded_files:
                         "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
                         "Cultura": tipo_plantio, "Tecnico": nome_tecnico, "_img_obj": img_plot
                     })
-            except Exception: continue
+            except: continue
     
     if novos_dados:
         df_novos = pd.DataFrame(novos_dados)
@@ -120,16 +115,15 @@ if uploaded_files:
         else:
             st.session_state.dados_analise = pd.concat([st.session_state.dados_analise, df_novos], ignore_index=True)
 
-# 6. EXIBIÇÃO DO RELATÓRIO COMPLETO
+# 6. RELATÓRIO DINÂMICO
 if st.session_state.dados_analise is not None and not st.session_state.dados_analise.empty:
     df = st.session_state.dados_analise
     media_ponto = df['Pragas'].mean()
     status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
     st.markdown('<div class="report-section">', unsafe_allow_html=True)
-    st.markdown(f"### 📊 Relatório Consolidado: {nome_fazenda}")
+    st.markdown(f"### 📊 BI - Dashboard Agrícola: {nome_fazenda}")
     
-    # KPIs RESTAURADOS
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Técnico", nome_tecnico)
     k2.metric("Cultura", tipo_plantio)
@@ -139,33 +133,44 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
 
     st.markdown("---")
     
-    # MAPA E GRÁFICOS (RESTAURADO CANDLESTICK)
     col_mapa, col_intel = st.columns([1.6, 1])
     with col_mapa:
-        st.subheader("📍 Mapa de Calor")
+        st.subheader("📍 Georreferenciamento de Pragas")
         df_geo = df[df['Latitude'] != "N/A"]
         if not df_geo.empty:
             m = folium.Map(location=[df_geo['Latitude'].astype(float).mean(), df_geo['Longitude'].astype(float).mean()], zoom_start=17)
             for _, row in df_geo.iterrows():
                 cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
                 folium.CircleMarker([row['Latitude'], row['Longitude']], radius=12, color=cor, fill=True, popup=f"{row['Amostra']}").add_to(m)
-            st_folium(m, use_container_width=True, height=500, key="mapa_final")
+            st_folium(m, use_container_width=True, height=550, key="mapa_final")
 
     with col_intel:
         st.subheader("📈 Inteligência de Dados")
-        # Gauge
-        fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=media_ponto, gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"}}))
+        
+        # 1. Gauge (Gráfico de Pressão)
+        fig_gauge = go.Figure(go.Indicator(mode="gauge+number", value=media_ponto, 
+            title={'text': "Média Pragas/Ponto"},
+            gauge={'axis': {'range': [0, 50]}, 'bar': {'color': "#1b5e20"},
+                   'steps': [{'range': [0, 15], 'color': "#c8e6c9"}, {'range': [15, 50], 'color': "#ffcdd2"}]}))
         fig_gauge.update_layout(height=250, margin=dict(l=20, r=20, t=30, b=0))
         st.plotly_chart(fig_gauge, use_container_width=True)
         
-        # Candlestick restaurado
-        st.write("**🕯️ Volatilidade por Ponto**")
+        # 2. Candlestick (Gráfico de Velas de Volatilidade)
+        st.write("**🕯️ Volatilidade da Infestação**")
         df_top = df.nlargest(5, 'Pragas')
-        fig_candle = go.Figure(data=[go.Candlestick(x=df_top['Amostra'], open=df_top['Pragas']*0.9, high=df_top['Pragas'], low=df_top['Pragas']*0.7, close=df_top['Pragas']*0.95)])
+        fig_candle = go.Figure(data=[go.Candlestick(x=df_top['Amostra'], 
+                                open=df_top['Pragas']*0.9, high=df_top['Pragas'], 
+                                low=df_top['Pragas']*0.7, close=df_top['Pragas']*0.95)])
         fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig_candle, use_container_width=True)
 
-    # LAUDO TÉCNICO RESTAURADO
+        # 3. Bar Chart (Gráfico de Barras de Top Focos)
+        st.write("**📊 Top 5 Focos Críticos**")
+        fig_bar = go.Figure(go.Bar(x=df_top['Pragas'], y=df_top['Amostra'], orientation='h', marker_color='#2e7d32'))
+        fig_bar.update_layout(height=180, margin=dict(l=0, r=0, t=0, b=0))
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # LAUDO TÉCNICO E EXPORTAÇÃO
     st.markdown("---")
     st.subheader("💡 Laudo e Recomendação")
     rec_col1, rec_col2 = st.columns([1, 3])
@@ -173,17 +178,12 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
         if status_sanitario == "CRÍTICO": st.error("🚨 INFESTAÇÃO ALTA")
         else: st.success("✅ SITUAÇÃO SOB CONTROLE")
     with rec_col2:
-        laudo_texto = f"Análise técnica no talhão **{talhao_id}** indica média de **{media_ponto:.1f}** pragas por ponto. "
-        laudo_texto += "Necessário aplicação de defensivos conforme bula." if status_sanitario == "CRÍTICO" else "Manter apenas vistorias periódicas."
-        st.info(laudo_texto)
+        st.info(f"O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas por ponto. {'Intervenção química recomendada.' if status_sanitario == 'CRÍTICO' else 'Seguir com monitoramento padrão.'}")
 
-    # EXPORTAÇÃO
-    df_export = df.drop(columns=['_img_obj', 'id'])
-    csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-    st.download_button("📥 Baixar Relatório (Excel/CSV)", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
+    csv = df.drop(columns=['_img_obj', 'id']).to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    st.download_button("📥 Baixar Relatório Full (Excel)", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
 
-    # GALERIA DE FOCOS
-    st.markdown("---")
+    # GALERIA
     st.subheader("📸 Detalhes das Amostras")
     for index, row in df.iterrows():
         g1, g2 = st.columns([1.5, 1])
@@ -195,12 +195,10 @@ if st.session_state.dados_analise is not None and not st.session_state.dados_ana
                 <h4 style="margin:0;">🪲 {row['Pragas']} Detectadas</h4>
                 <p style="font-size:12px;"><b>Arquivo:</b> {row['Amostra']}</p>
                 <hr>
-                {"<a href='"+row['Maps_Link']+"' target='_blank'><button class='loc-btn'>📍 GOOGLE MAPS</button></a>" if row['Latitude'] != "N/A" else "<i>Localização Indisponível</i>"}
+                {"<a href='"+row['Maps_Link']+"' target='_blank'><button class='loc-btn'>📍 GOOGLE MAPS</button></a>" if row['Latitude'] != "N/A" else "<i>Sem GPS</i>"}
             </div>
             """, unsafe_allow_html=True)
-            if st.button(f"🗑️ Remover Foto {index}", key=f"del_{row['id']}"):
+            if st.button(f"🗑️ Remover {index}", key=f"del_{row['id']}"):
                 st.session_state.dados_analise = st.session_state.dados_analise.drop(index).reset_index(drop=True)
                 st.rerun()
         st.markdown("---")
-else:
-    st.info("Aguardando upload de fotos para gerar o diagnóstico...")
