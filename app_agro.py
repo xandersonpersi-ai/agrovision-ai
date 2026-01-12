@@ -137,7 +137,7 @@ else:
 
             st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-            # KPIs (TODOS OS CAMPOS RESTAURADOS)
+            # KPIs COMPLETOS
             st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
             k1, k2, k3, k4, k5 = st.columns(5)
             k1.metric("Responsável Técnico", nome_tecnico)
@@ -177,7 +177,7 @@ else:
                 fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig_candle, use_container_width=True)
 
-            # RECOMENDAÇÃO TÉCNICA (CITANDO O TÉCNICO)
+            # RECOMENDAÇÃO TÉCNICA
             st.markdown("---")
             st.subheader("💡 Recomendação Técnica")
             rec_col1, rec_col2 = st.columns([1, 3])
@@ -187,12 +187,12 @@ else:
             with rec_col2:
                 texto_laudo = (
                     f"O técnico **{nome_tecnico}** realizou o diagnóstico para a cultura de **{tipo_plantio}** na safra **{safra}**. "
-                    f"A análise no talhão **{talhao_id}** indica uma média de **{media_ponto:.1f}** pragas por ponto. "
+                    f"Análise no talhão **{talhao_id}** indica média de **{media_ponto:.1f}** pragas por ponto. "
                 )
                 if status_sanitario == "CRÍTICO":
-                    texto_laudo += "⚠️ **Ação Recomendada:** Os níveis ultrapassaram o limite econômico. Sugere-se intervenção imediata."
+                    texto_laudo += "⚠️ **Ação:** Níveis acima do limite econômico. Intervenção recomendada."
                 else:
-                    texto_laudo += "👍 **Ação Recomendada:** Níveis sob controle. Manter monitoramento."
+                    texto_laudo += "👍 **Ação:** Níveis sob controle. Manter monitoramento."
                 st.info(texto_laudo)
 
             # EXPORTAÇÃO
@@ -201,7 +201,7 @@ else:
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
             st.download_button(label="📥 Baixar CSV para Excel", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
 
-            # GALERIA
+            # GALERIA (AJUSTADO: APENAS CULTURA E SAFRA)
             st.subheader("📸 Detalhes dos Focos (GPS)")
             for _, row in df.nlargest(10, 'Pragas').iterrows():
                 g1, g2 = st.columns([1.5, 1])
@@ -211,7 +211,6 @@ else:
                     <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                         <h3 style="margin-top:0;">🪲 {row['Pragas']} Detectadas</h3>
                         <p><b>Amostra:</b> {row['Amostra']}</p>
-                        <p><b>Técnico:</b> {row['Tecnico']}</p>
                         <p><b>Cultura:</b> {row['Cultura']} | <b>Safra:</b> {row['Safra']}</p>
                         <hr>
                         <a href="{row['Maps_Link']}" target="_blank"><button class="loc-btn">📍 LOCALIZAR AGORA</button></a>
