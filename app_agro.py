@@ -9,7 +9,7 @@ from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM ANIMAÇÕES
+# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM ANIMAÇÕES E NEON
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
 st.markdown("""
@@ -20,23 +20,27 @@ st.markdown("""
         to { opacity: 1; transform: translateY(0); }
     }
     
+    /* ANIMAÇÃO DO PULSO NEON */
+    @keyframes neonPulse {
+        0% { box-shadow: 0 0 5px #ff4b4b, 0 0 10px #ff4b4b; }
+        50% { box-shadow: 0 0 20px #ff4b4b, 0 0 30px #ff0000; }
+        100% { box-shadow: 0 0 5px #ff4b4b, 0 0 10px #ff4b4b; }
+    }
+
     .main { background-color: #f4f7f6; }
     
-    /* Seus KPIs agora com sombra suave e flutuação ao passar o mouse */
+    /* Seus KPIs com flutuação */
     .stMetric { 
         background-color: #ffffff; 
         padding: 20px; 
         border-radius: 15px; 
         border-top: 5px solid #2e7d32; 
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        transition: transform 0.3s ease;
     }
-    .stMetric:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.15);
-    }
+    .stMetric:hover { transform: translateY(-5px); }
 
-    /* O BOTÃO DE LOCALIZAÇÃO - Agora com gradiente e pulso ao passar o mouse */
+    /* O BOTÃO COM NEON PULSANTE */
     .loc-btn {
         display: inline-block;
         padding: 15px 25px;
@@ -44,29 +48,28 @@ st.markdown("""
         cursor: pointer;
         text-align: center;
         text-decoration: none;
-        outline: none;
         color: #fff;
-        background: linear-gradient(45deg, #d32f2f, #f44336);
+        background: linear-gradient(45deg, #d32f2f, #ff4b4b);
         border: none;
-        border-radius: 10px;
+        border-radius: 12px;
         font-weight: bold;
         width: 100%;
-        box-shadow: 0 4px #991b1b;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
+        /* Aplicação do Neon Pulsante */
+        animation: neonPulse 2s infinite ease-in-out;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
+    
     .loc-btn:hover {
-        background: linear-gradient(45deg, #b71c1c, #d32f2f);
-        transform: scale(1.02);
-    }
-    .loc-btn:active {
-        box-shadow: 0 1px #661010;
-        transform: translateY(3px);
+        background: linear-gradient(45deg, #ff0000, #d32f2f);
+        transform: scale(1.03);
+        animation: none; /* Para o pulso e fica brilho fixo no hover */
+        box-shadow: 0 0 40px #ff0000;
+        color: #fff;
     }
 
-    /* Container para aplicar animação nas seções do relatório */
-    .report-section {
-        animation: fadeInUp 0.6s ease-out;
-    }
+    .report-section { animation: fadeInUp 0.6s ease-out; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,7 +103,7 @@ def extrair_gps_st(img_file):
 
 def link_google_maps(lat, lon):
     if lat != "N/A":
-        return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+        return f"http://www.google.com/maps/search/?api=1&query={lat},{lon}"
     return "Sem GPS"
 
 # 5. UPLOAD E PROCESSAMENTO IA
@@ -144,7 +147,6 @@ if uploaded_files:
         media_ponto = df['Pragas'].mean()
         status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
-        # TUDO ABAIXO ESTÁ DENTRO DA DIV ANIMADA
         st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
         # 6. SUMÁRIO EXECUTIVO (KPIs)
@@ -163,8 +165,7 @@ if uploaded_files:
             st.subheader("📍 Georreferenciamento")
             df_geo = df[df['Latitude'] != "N/A"]
             if not df_geo.empty:
-                m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18, tiles=None)
-                folium.TileLayer('OpenStreetMap', control=False).add_to(m)
+                m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18)
                 for _, row in df_geo.iterrows():
                     cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
                     folium.CircleMarker([row['Latitude'], row['Longitude']], radius=10, color=cor, fill=True).add_to(m)
@@ -198,10 +199,9 @@ if uploaded_files:
             if status_sanitario == "CRÍTICO": st.error("ALTA INFESTAÇÃO")
             else: st.success("BAIXA INFESTAÇÃO")
         with rec_col2:
-            st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas. " + 
-                     ("Recomenda-se controle imediato." if status_sanitario == "CRÍTICO" else "Níveis controlados."))
+            st.write(f"**Atenção {nome_tecnico}:** O talhão **{talhao_id}** apresenta média de **{media_ponto:.1f}** pragas.")
 
-        # 9. DADOS BRUTOS E DOWNLOAD (EXCEL-READY)
+        # 9. DADOS BRUTOS E DOWNLOAD
         st.markdown("---")
         with st.expander("📊 Ver Dados Detalhados e Exportar"):
             df_export = df.drop(columns=['_img_obj'])
@@ -209,7 +209,7 @@ if uploaded_files:
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
             st.download_button("📥 Baixar Relatório para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
 
-        # 10. GALERIA COM BOTÃO DE LOCALIZAÇÃO (NOVIDADE)
+        # 10. GALERIA COM BOTÃO NEON
         st.markdown("---")
         st.subheader("📸 Galeria de Focos e Navegação GPS")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
@@ -217,24 +217,20 @@ if uploaded_files:
             with g1:
                 st.image(row['_img_obj'], use_container_width=True)
             with g2:
-                # Card de info estilizado ao lado da imagem
                 st.markdown(f"""
                 <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                     <h3 style="margin-top:0;">🪲 {row['Pragas']} Pragas</h3>
                     <p><b>Amostra:</b> {row['Amostra']}</p>
                     <p><b>Lat/Lon:</b> {row['Latitude']}, {row['Longitude']}</p>
                     <hr>
+                    <a href="{row['Maps_Link']}" target="_blank" style="text-decoration:none;">
+                        <button class="loc-btn">📍 LOCALIZAR AGORA</button>
+                    </a>
+                </div>
                 """, unsafe_allow_html=True)
-                
-                if row['Latitude'] != "N/A":
-                    st.markdown(f'<a href="{row["Maps_Link"]}" target="_blank"><button class="loc-btn">📍 LOCALIZAR NO MAPA</button></a>', unsafe_allow_html=True)
-                else:
-                    st.warning("⚠️ GPS não disponível nesta foto.")
-                
-                st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("---")
         
-        st.markdown('</div>', unsafe_allow_html=True) # Fim da div animada
+        st.markdown('</div>', unsafe_allow_html=True)
 
 else:
     st.info("💡 Aguardando fotos para processamento...")
