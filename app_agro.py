@@ -9,7 +9,7 @@ from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE "PREMIUM" COM NEON AZUL #68CAED
+# 1. CONFIGURAÇÃO DE INTERFACE COM BOTÃO AZUL E NEON VERMELHO
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
 st.markdown(f"""
@@ -19,11 +19,11 @@ st.markdown(f"""
         to {{ opacity: 1; transform: translateY(0); }}
     }}
     
-    /* ANIMAÇÃO DO PULSO NEON EM AZUL #68CAED */
-    @keyframes neonPulse {{
-        0% {{ box-shadow: 0 0 5px #68CAED, 0 0 10px #68CAED; }}
-        50% {{ box-shadow: 0 0 20px #68CAED, 0 0 30px #68CAED; }}
-        100% {{ box-shadow: 0 0 5px #68CAED, 0 0 10px #68CAED; }}
+    /* ANIMAÇÃO DO PULSO NEON EM VERMELHO */
+    @keyframes neonPulseRed {{
+        0% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
+        50% {{ box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }}
+        100% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
     }}
 
     .main {{ background-color: #f4f7f6; }}
@@ -38,7 +38,7 @@ st.markdown(f"""
     }}
     .stMetric:hover {{ transform: translateY(-5px); }}
 
-    /* O BOTÃO COM SUA COR PERSONALIZADA #68CAED */
+    /* O BOTÃO: FUNDO AZUL #68CAED COM BORDA E NEON VERMELHO */
     .loc-btn {{
         display: inline-block;
         padding: 15px 25px;
@@ -47,21 +47,21 @@ st.markdown(f"""
         text-align: center;
         text-decoration: none;
         color: #fff;
-        background: #68CAED; /* Sua cor aqui */
-        border: none;
+        background-color: #68CAED; /* Fundo Azul Celeste */
+        border: 3px solid #FF0000; /* Borda Vermelha Fixa */
         border-radius: 12px;
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
-        animation: neonPulse 2s infinite ease-in-out;
+        animation: neonPulseRed 1.5s infinite ease-in-out; /* Pulso Neon Vermelho */
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
     
     .loc-btn:hover {{
-        background: #4ab8db; /* Um tom levemente mais escuro para o hover */
+        background-color: #4ab8db; 
         transform: scale(1.03);
-        box-shadow: 0 0 40px #68CAED;
+        box-shadow: 0 0 40px #FF0000; /* Brilho intenso no hover */
         color: #fff;
     }}
 
@@ -99,7 +99,7 @@ def extrair_gps_st(img_file):
 
 def link_google_maps(lat, lon):
     if lat != "N/A":
-        return f"https://www.google.com/maps/search/?api=1&query={lat},{lon}"
+        return f"https://www.google.com/maps?q={lat},{lon}"
     return "#"
 
 # 5. UPLOAD E IA
@@ -140,7 +140,7 @@ if uploaded_files:
 
         st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-        # 6. SUMÁRIO
+        # 6. KPIs
         st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
@@ -188,7 +188,7 @@ if uploaded_files:
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
             st.download_button("📥 Baixar CSV para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
 
-        # 9. GALERIA COM BOTÃO NEON AZUL #68CAED
+        # 9. GALERIA COM BOTÃO CUSTOMIZADO
         st.subheader("📸 Galeria de Focos e Navegação GPS")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
             g1, g2 = st.columns([1.5, 1])
