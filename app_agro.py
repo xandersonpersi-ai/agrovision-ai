@@ -52,7 +52,7 @@ st.title("AgroVision Pro AI 🛰️")
 st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. SIDEBAR - CENTRAL DE COMANDO
+# 3. SIDEBAR
 st.sidebar.header("🕹️ Central de Comando")
 modo_operacao = st.sidebar.radio("Selecione o Modo:", ["📂 Analisar Fotos", "🛸 Drone Real-Time"])
 
@@ -67,7 +67,7 @@ with st.sidebar.expander("⚙️ Configurações de IA"):
     conf_threshold = st.slider("Sensibilidade", 0.01, 1.0, 0.25)
     rtsp_url = st.text_input("URL do Stream (RTSP/IP)", "0")
 
-# 4. FUNÇÕES GPS
+# 4. FUNÇÕES AUXILIARES
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -79,11 +79,9 @@ def extrair_gps_st(img_file):
     return None
 
 def link_google_maps(lat, lon):
-    if lat != "N/A":
-        return f"https://www.google.com/maps?q={lat},{lon}"
-    return "#"
+    return f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" else "#"
 
-# 5. MODO DRONE REAL-TIME
+# 5. MODO DRONE
 if modo_operacao == "🛸 Drone Real-Time":
     st.subheader("🎮 Live Stream: Monitoramento Aéreo")
     run_drone = st.toggle("🚀 ATIVAR CÂMERA DO DRONE")
@@ -92,20 +90,17 @@ if modo_operacao == "🛸 Drone Real-Time":
     if run_drone:
         cam_source = int(rtsp_url) if rtsp_url.isdigit() else rtsp_url
         camera = cv2.VideoCapture(cam_source)
-        
         while run_drone:
             ret, frame = camera.read()
             if not ret:
                 st.error("Falha ao receber imagem. Verifique a conexão.")
                 break
-            
             results = model.predict(frame, conf=conf_threshold, verbose=False)
-            annotated_frame = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
-            FRAME_WINDOW.image(annotated_frame)
-            
+            ann_frame = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
+            FRAME_WINDOW.image(ann_frame)
         camera.release()
     else:
-        st.info("Sistema em Stand-by. Ative o botão acima para conectar.")
+        st.info("Sistema em Stand-by.")
 
 # 6. MODO ANALISAR FOTOS
 else:
@@ -120,15 +115,13 @@ else:
                 img = Image.open(file)
                 results = model.predict(source=img, conf=conf_threshold, verbose=False)
                 img_com_caixas = Image.fromarray(results[0].plot()[:, :, ::-1])
-                
                 file.seek(0)
                 coords = extrair_gps_st(file)
                 lat, lon = (coords[0], coords[1]) if coords else ("N/A", "N/A")
                 
                 dados_lavoura.append({
                     "Amostra": file.name, "Pragas": len(results[0].boxes),
-                    "Latitude": lat, "Longitude": lon,
-                    "Maps_Link": link_google_maps(lat, lon),
+                    "Latitude": lat, "Longitude": lon, "Maps_Link": link_google_maps(lat, lon),
                     "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
                     "Cultura": tipo_plantio, "Data": datetime.now().strftime('%d/%m/%Y'),
                     "_img_obj": img_com_caixas
@@ -143,11 +136,11 @@ else:
 
             st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-            # KPIs COM SAFRA/CICLO
+            # KPIs (REINSERIDO CULTURA E SAFRA)
             st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
             k1, k2, k3, k4 = st.columns(4)
-            k1.metric("Propriedade", nome_fazenda)
-            k2.metric("Ciclo / Safra", safra)
+            k1.metric("Cultura Atual", tipo_plantio) # CAMPO RECUPERADO
+            k2.metric("Ciclo / Safra", safra)         # CAMPO RECUPERADO
             k3.metric("Total Detectado", f"{int(df['Pragas'].sum())} un")
             k4.metric("Status Sanitário", status_sanitario, delta="Alerta" if status_sanitario == "CRÍTICO" else "Ok")
 
@@ -182,7 +175,7 @@ else:
                 fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
                 st.plotly_chart(fig_candle, use_container_width=True)
 
-            # PARECER TÉCNICO COMPLETO COM CICLO/SAFRA
+            # RECOMENDAÇÃO TÉCNICA
             st.markdown("---")
             st.subheader("💡 Recomendação Técnica")
             rec_col1, rec_col2 = st.columns([1, 3])
@@ -197,7 +190,7 @@ else:
                 if status_sanitario == "CRÍTICO":
                     texto_laudo += "⚠️ **Ação Recomendada:** Os níveis ultrapassaram o limite econômico. Sugere-se intervenção imediata."
                 else:
-                    texto_laudo += "👍 **Ação Recomendada:** Níveis sob controle para este estágio do ciclo. Manter monitoramento."
+                    texto_laudo += "👍 **Ação Recomendada:** Níveis sob controle. Manter monitoramento."
                 st.info(texto_laudo)
 
             # EXPORTAÇÃO
@@ -216,14 +209,10 @@ else:
                     <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
                         <h3 style="margin-top:0;">🪲 {row['Pragas']} Detectadas</h3>
                         <p><b>Amostra:</b> {row['Amostra']}</p>
-                        <p><b>Safra:</b> {row['Safra']}</p>
+                        <p><b>Cultura:</b> {row['Cultura']} | <b>Safra:</b> {row['Safra']}</p>
                         <hr>
-                        <a href="{row['Maps_Link']}" target="_blank">
-                            <button class="loc-btn">📍 LOCALIZAR AGORA</button>
-                        </a>
+                        <a href="{row['Maps_Link']}" target="_blank"><button class="loc-btn">📍 LOCALIZAR AGORA</button></a>
                     </div>
                     """, unsafe_allow_html=True)
                 st.markdown("---")
             st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.info("💡 Arraste fotos ou use o modo Drone na barra lateral.")
