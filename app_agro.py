@@ -9,7 +9,7 @@ from PIL import Image
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DE INTERFACE COM BOTÃO AZUL E NEON VERMELHO
+# 1. CONFIGURAÇÃO DE INTERFACE PREMIUM
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
 st.markdown(f"""
@@ -19,7 +19,6 @@ st.markdown(f"""
         to {{ opacity: 1; transform: translateY(0); }}
     }}
     
-    /* ANIMAÇÃO DO PULSO NEON EM VERMELHO */
     @keyframes neonPulseRed {{
         0% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
         50% {{ box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }}
@@ -38,7 +37,6 @@ st.markdown(f"""
     }}
     .stMetric:hover {{ transform: translateY(-5px); }}
 
-    /* O BOTÃO: FUNDO AZUL #68CAED COM BORDA E NEON VERMELHO */
     .loc-btn {{
         display: inline-block;
         padding: 15px 25px;
@@ -47,13 +45,13 @@ st.markdown(f"""
         text-align: center;
         text-decoration: none;
         color: #fff;
-        background-color: #68CAED; /* Fundo Azul Celeste */
-        border: 3px solid #FF0000; /* Borda Vermelha Fixa */
+        background-color: #68CAED;
+        border: 3px solid #FF0000;
         border-radius: 12px;
         font-weight: bold;
         width: 100%;
         transition: all 0.3s ease;
-        animation: neonPulseRed 1.5s infinite ease-in-out; /* Pulso Neon Vermelho */
+        animation: neonPulseRed 1.5s infinite ease-in-out;
         text-transform: uppercase;
         letter-spacing: 1px;
     }}
@@ -61,7 +59,7 @@ st.markdown(f"""
     .loc-btn:hover {{
         background-color: #4ab8db; 
         transform: scale(1.03);
-        box-shadow: 0 0 40px #FF0000; /* Brilho intenso no hover */
+        box-shadow: 0 0 40px #FF0000;
         color: #fff;
     }}
 
@@ -74,7 +72,7 @@ st.title("AgroVision Pro AI 🛰️")
 st.caption(f"Plataforma de Diagnóstico Digital | Sessão: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
 st.markdown("---")
 
-# 3. FICHA TÉCNICA (SIDEBAR)
+# 3. SIDEBAR
 st.sidebar.header("📋 Cadastro de Campo")
 with st.sidebar.expander("Identificação", expanded=True):
     nome_fazenda = st.text_input("Propriedade", "Fazenda Santa Fé")
@@ -86,7 +84,7 @@ with st.sidebar.expander("Identificação", expanded=True):
 with st.sidebar.expander("Configurações de IA"):
     conf_threshold = st.slider("Sensibilidade (Confidence)", 0.01, 1.0, 0.15)
 
-# 4. FUNÇÕES GPS
+# 4. GPS
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -102,7 +100,7 @@ def link_google_maps(lat, lon):
         return f"https://www.google.com/maps?q={lat},{lon}"
     return "#"
 
-# 5. UPLOAD E IA
+# 5. PROCESSAMENTO
 uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
 if uploaded_files:
@@ -140,7 +138,7 @@ if uploaded_files:
 
         st.markdown('<div class="report-section">', unsafe_allow_html=True)
 
-        # 6. KPIs
+        # 6. SUMÁRIO (KPIs)
         st.markdown(f"### 📊 Sumário Executivo: {nome_fazenda}")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("Técnico", nome_tecnico)
@@ -171,7 +169,6 @@ if uploaded_files:
             fig_gauge.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20))
             st.plotly_chart(fig_gauge, use_container_width=True)
 
-            # TOP 10 CANDLESTICK
             st.write("**🕯️ Volatilidade: Top 10 Pontos**")
             df_top10 = df.nlargest(10, 'Pragas')
             fig_candle = go.Figure(data=[go.Candlestick(
@@ -181,14 +178,35 @@ if uploaded_files:
             fig_candle.update_layout(height=250, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
             st.plotly_chart(fig_candle, use_container_width=True)
 
-        # 8. EXPORTAR
+        # 8. NOVIDADE: PARECER TÉCNICO AUTOMÁTICO (RESTAURADO)
         st.markdown("---")
-        with st.expander("📊 Exportar Relatório"):
+        st.subheader("💡 Parecer Técnico Automático")
+        rec_col1, rec_col2 = st.columns([1, 3])
+        with rec_col1:
+            if status_sanitario == "CRÍTICO":
+                st.error("🚨 ALTA INFESTAÇÃO")
+            else:
+                st.success("✅ BAIXA INFESTAÇÃO")
+        with rec_col2:
+            texto_recomendacao = (
+                f"O técnico **{nome_tecnico}** reportou que o talhão **{talhao_id}** "
+                f"apresenta uma média de **{media_ponto:.1f}** pragas por ponto de coleta. "
+            )
+            if status_sanitario == "CRÍTICO":
+                texto_recomendacao += "⚠️ **Ação Recomendada:** Os níveis ultrapassaram o limite econômico. Recomenda-se controle químico ou biológico imediato."
+            else:
+                texto_recomendacao += "👍 **Ação Recomendada:** Os níveis estão sob controle. Manter monitoramento semanal conforme o ciclo da cultura."
+            st.info(texto_recomendacao)
+
+        # 9. EXPORTAR
+        st.markdown("---")
+        with st.expander("📊 Exportar Dados Detalhados"):
             df_export = df.drop(columns=['_img_obj'])
+            st.dataframe(df_export, use_container_width=True)
             csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
             st.download_button("📥 Baixar CSV para Excel", csv, f"Relatorio_{nome_fazenda}.csv", "text/csv")
 
-        # 9. GALERIA COM BOTÃO CUSTOMIZADO
+        # 10. GALERIA
         st.subheader("📸 Galeria de Focos e Navegação GPS")
         for _, row in df.nlargest(10, 'Pragas').iterrows():
             g1, g2 = st.columns([1.5, 1])
@@ -197,9 +215,9 @@ if uploaded_files:
             with g2:
                 st.markdown(f"""
                 <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-                    <h3 style="margin-top:0;">🪲 {row['Pragas']} Pragas</h3>
+                    <h3 style="margin-top:0;">🪲 {row['Pragas']} Pragas Detectadas</h3>
                     <p><b>Amostra:</b> {row['Amostra']}</p>
-                    <p><b>Lat/Lon:</b> {row['Latitude']}, {row['Longitude']}</p>
+                    <p><b>Coordenadas:</b> {row['Latitude']}, {row['Longitude']}</p>
                     <hr>
                     <a href="{row['Maps_Link']}" target="_blank" style="text-decoration:none;">
                         <button class="loc-btn">📍 LOCALIZAR AGORA</button>
