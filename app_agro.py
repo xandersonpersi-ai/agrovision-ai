@@ -14,39 +14,39 @@ import numpy as np
 # 1. CONFIGURAÇÃO DE INTERFACE PREMIUM
 st.set_page_config(page_title="AgroVision Pro | Intelligence", layout="wide")
 
-# Inicialização da Memória de Sessão (Para não perder dados ao trocar de aba)
-if 'dados_historicos' not in st.session_state:
-    st.session_state.dados_historicos = None
+# MEMÓRIA DO SISTEMA: Inicializa o armazenamento se ele não existir
+if 'dados_analise' not in st.session_state:
+    st.session_state.dados_analise = None
 
-# CSS para correção de bugs visual e animações (Mantido Original)
-st.markdown(f"""
+# CSS ORIGINAL (Protegido contra erros de sintaxe)
+st.markdown("""
     <style>
-    iframe {{ width: 100% !important; border-radius: 15px; }}
-    @keyframes fadeInUp {{
-        from {{ opacity: 0; transform: translateY(20px); }}
-        to {{ opacity: 1; transform: translateY(0); }}
-    }}
-    @keyframes neonPulseRed {{
-        0% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
-        50% {{ box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }}
-        100% {{ box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }}
-    }}
-    .stMetric {{ 
+    iframe { width: 100% !important; border-radius: 15px; }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes neonPulseRed {
+        0% { box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }
+        50% { box-shadow: 0 0 20px #FF0000, 0 0 30px #FF0000; }
+        100% { box-shadow: 0 0 5px #FF0000, 0 0 10px #FF0000; }
+    }
+    .stMetric { 
         background-color: #ffffff; padding: 20px; border-radius: 15px; 
         border-top: 5px solid #2e7d32; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }}
-    .loc-btn {{
+    }
+    .loc-btn {
         display: inline-block; padding: 15px 25px; font-size: 16px; cursor: pointer;
         text-align: center; text-decoration: none; color: #fff; background-color: #68CAED;
         border: 3px solid #FF0000; border-radius: 12px; font-weight: bold; width: 100%;
         animation: neonPulseRed 1.5s infinite ease-in-out; text-transform: uppercase;
         letter-spacing: 1px;
-    }}
+    }
     .source-tag {
         font-size: 10px; background: #e3f2fd; padding: 2px 8px; border-radius: 4px; 
         font-weight: bold; color: #1565c0; margin-bottom: 5px; display: inline-block;
     }
-    .report-section {{ animation: fadeInUp 0.6s ease-out; }}
+    .report-section { animation: fadeInUp 0.6s ease-out; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -76,7 +76,7 @@ with st.sidebar.expander("⚙️ Configurações de IA"):
     conf_threshold = st.slider("Sensibilidade", 0.01, 1.0, 0.25)
     rtsp_url = st.text_input("URL do Stream (RTSP/IP)", "0")
 
-# 4. FUNÇÕES AUXILIARES (Hibridismo Drone/Celular)
+# 4. FUNÇÕES AUXILIARES
 def extrair_gps_st(img_file):
     try:
         img = ExifImage(img_file)
@@ -84,17 +84,16 @@ def extrair_gps_st(img_file):
             lat = (img.gps_latitude[0] + img.gps_latitude[1]/60 + img.gps_latitude[2]/3600) * (-1 if img.gps_latitude_ref == 'S' else 1)
             lon = (img.gps_longitude[0] + img.gps_longitude[1]/60 + img.gps_longitude[2]/3600) * (-1 if img.gps_longitude_ref == 'W' else 1)
             return lat, lon, "🛰️ DRONE"
-    except: 
-        return None, None, "📱 CELULAR"
+    except: pass
     return None, None, "📱 CELULAR"
 
 def link_google_maps(lat, lon):
-    return f"https://www.google.com/maps?q={lat},{lon}" if lat != "N/A" and lat is not None else "#"
+    return f"https://www.google.com/maps?q={lat},{lon}" if lat is not None else "#"
 
 # 5. MODO DRONE
 if modo_operacao == "🛸 Drone Real-Time":
     st.subheader("🎮 Live Stream: Monitoramento Aéreo")
-    st.info("💡 Os dados carregados na aba de fotos permanecem salvos no relatório abaixo.")
+    st.info("💡 As análises de fotos carregadas continuam salvas no relatório abaixo.")
     run_drone = st.toggle("🚀 ATIVAR CÂMERA DO DRONE")
     FRAME_WINDOW = st.image([]) 
     
@@ -103,22 +102,18 @@ if modo_operacao == "🛸 Drone Real-Time":
         camera = cv2.VideoCapture(cam_source)
         while run_drone:
             ret, frame = camera.read()
-            if not ret:
-                st.error("Falha ao receber imagem. Verifique a conexão.")
-                break
+            if not ret: break
             results = model.predict(frame, conf=conf_threshold, verbose=False)
             ann_frame = cv2.cvtColor(results[0].plot(), cv2.COLOR_BGR2RGB)
             FRAME_WINDOW.image(ann_frame)
         camera.release()
-    else:
-        st.info("Sistema em Stand-by.")
 
-# 6. MODO ANALISAR FOTOS (Com Persistência e Suporte Híbrido)
+# 6. MODO ANALISAR FOTOS
 else:
     uploaded_files = st.file_uploader("📂 ARRASTE AS FOTOS PARA VARREDURA", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
 
     if uploaded_files:
-        dados_lavoura = []
+        dados_temp = []
         progresso = st.progress(0)
         
         for i, file in enumerate(uploaded_files):
@@ -127,29 +122,25 @@ else:
                 results = model.predict(source=img, conf=conf_threshold, verbose=False)
                 img_com_caixas = Image.fromarray(results[0].plot()[:, :, ::-1])
                 file.seek(0)
-                
                 lat, lon, fonte = extrair_gps_st(file)
-                lat_val = lat if lat is not None else "N/A"
-                lon_val = lon if lon is not None else "N/A"
                 
-                dados_lavoura.append({
+                dados_temp.append({
                     "Amostra": file.name, "Pragas": len(results[0].boxes),
-                    "Latitude": lat_val, "Longitude": lon_val, "Fonte": fonte,
-                    "Maps_Link": link_google_maps(lat, lon),
+                    "Latitude": lat if lat else "N/A", "Longitude": lon if lon else "N/A",
+                    "Fonte": fonte, "Maps_Link": link_google_maps(lat, lon),
                     "Fazenda": nome_fazenda, "Safra": safra, "Talhao": talhao_id,
-                    "Cultura": tipo_plantio, "Data": datetime.now().strftime('%d/%m/%Y'),
-                    "Tecnico": nome_tecnico,
+                    "Cultura": tipo_plantio, "Tecnico": nome_tecnico,
                     "_img_obj": img_com_caixas
                 })
                 progresso.progress((i + 1) / len(uploaded_files))
             except: continue
         
-        # Salva na Sessão para não sumir ao trocar de aba
-        st.session_state.dados_historicos = pd.DataFrame(dados_lavoura)
+        # Salva o resultado na memória da sessão
+        st.session_state.dados_analise = pd.DataFrame(dados_temp)
 
-# EXIBIÇÃO DO RELATÓRIO (Se houver dados na sessão)
-if st.session_state.dados_historicos is not None:
-    df = st.session_state.dados_historicos
+# EXIBIÇÃO DO RELATÓRIO (Se houver dados salvos na memória)
+if st.session_state.dados_analise is not None:
+    df = st.session_state.dados_analise
     media_ponto = df['Pragas'].mean()
     status_sanitario = "CRÍTICO" if media_ponto > 15 else "NORMAL"
 
@@ -166,25 +157,18 @@ if st.session_state.dados_historicos is not None:
 
     st.markdown("---")
     
-    # MAPA E ANÁLISE TÉCNICA
     col_mapa, col_intel = st.columns([1.6, 1])
     with col_mapa:
         st.subheader("📍 Georreferenciamento")
-        # Filtra apenas pontos válidos para o mapa não quebrar com fotos de celular sem GPS
         df_geo = df[df['Latitude'] != "N/A"]
-        
         if not df_geo.empty:
-            m = folium.Map(location=[df_geo['Latitude'].astype(float).mean(), df_geo['Longitude'].astype(float).mean()], zoom_start=18, control_scale=True)
+            m = folium.Map(location=[df_geo['Latitude'].mean(), df_geo['Longitude'].mean()], zoom_start=18)
             for _, row in df_geo.iterrows():
                 cor = 'red' if row['Pragas'] > 15 else 'orange' if row['Pragas'] > 5 else 'green'
-                folium.CircleMarker(
-                    location=[row['Latitude'], row['Longitude']],
-                    radius=10, color=cor, fill=True, fill_opacity=0.7,
-                    popup=f"{row['Pragas']} pragas ({row['Fonte']})"
-                ).add_to(m)
-            st_folium(m, use_container_width=True, height=500, returned_objects=[])
+                folium.CircleMarker(location=[row['Latitude'], row['Longitude']], radius=10, color=cor, fill=True, popup=f"{row['Pragas']} pragas").add_to(m)
+            st_folium(m, use_container_width=True, height=500)
         else:
-            st.warning("⚠️ Fotos sem metadados de GPS detectadas. O mapa exibe apenas pontos de Drone/GPS ativo.")
+            st.warning("⚠️ Nenhuma coordenada GPS encontrada nas fotos.")
 
     with col_intel:
         st.subheader("📈 Análise de Pressão")
@@ -203,35 +187,27 @@ if st.session_state.dados_historicos is not None:
         fig_candle.update_layout(height=220, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=0, b=0))
         st.plotly_chart(fig_candle, use_container_width=True)
 
-    # RECOMENDAÇÃO TÉCNICA
+    # RECOMENDAÇÃO TÉCNICA E EXPORTAÇÃO
     st.markdown("---")
-    st.subheader("💡 Recomendação Técnica")
-    rec_col1, rec_col2 = st.columns([1, 3])
-    with rec_col1:
-        if status_sanitario == "CRÍTICO": st.error("🚨 ALTA INFESTAÇÃO")
-        else: st.success("✅ BAIXA INFESTAÇÃO")
-    with rec_col2:
-        st.info(f"O técnico **{nome_tecnico}** para a cultura **{tipo_plantio}** ({safra}) no talhão **{talhao_id}** indica média de **{media_ponto:.1f}** pragas. Status: {status_sanitario}.")
-
-    # EXPORTAÇÃO
-    df_export = df.drop(columns=['_img_obj'])
-    csv = df_export.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    st.info(f"O técnico **{nome_tecnico}** analisou o talhão **{talhao_id}** ({tipo_plantio}/{safra}). Média: {media_ponto:.1f} pragas/ponto.")
+    
+    csv = df.drop(columns=['_img_obj']).to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     st.download_button(label="📥 Baixar CSV para Excel", data=csv, file_name=f"Relatorio_{nome_fazenda}.csv", use_container_width=True)
 
-    # GALERIA (AJUSTADO: Fonte Drone/Celular + Persistência)
+    # GALERIA ORIGINAL
     st.subheader("📸 Detalhes dos Focos")
     for _, row in df.iterrows():
         g1, g2 = st.columns([1.5, 1])
         with g1: st.image(row['_img_obj'], use_container_width=True)
         with g2:
             st.markdown(f"""
-            <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+            <div style="background: white; padding: 20px; border-radius: 15px; border: 1px solid #eee;">
                 <span class="source-tag">{row['Fonte']}</span>
                 <h3 style="margin-top:0;">🪲 {row['Pragas']} Detectadas</h3>
                 <p><b>Amostra:</b> {row['Amostra']}</p>
                 <p><b>Cultura:</b> {row['Cultura']} | <b>Safra:</b> {row['Safra']}</p>
                 <hr>
-                {"<a href='"+row['Maps_Link']+"' target='_blank'><button class='loc-btn'>📍 LOCALIZAR AGORA</button></a>" if row['Latitude'] != "N/A" else "<i>GPS Indisponível (Celular)</i>"}
+                {"<a href='"+row['Maps_Link']+"' target='_blank'><button class='loc-btn'>📍 LOCALIZAR AGORA</button></a>" if row['Latitude'] != "N/A" else "<i>Sem GPS</i>"}
             </div>
             """, unsafe_allow_html=True)
         st.markdown("---")
